@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>企业知识库 RAG 问答系统 — JasonPan</title>
+<title>基于 RAG 的企业平台知识问答系统 — JasonPan</title>
 <meta name="description" content="BM25 + BGE-M3 混合召回、父子块回填、RRF 融合与精排，生成侧强制引用编号，答案可回溯到页码与原图。">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23171610'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='15' fill='%23F7F5F0' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230F1115'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='15' fill='%23FFFFFF' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="../assets/style.css">
 <link rel="canonical" href="https://junjianpan95.github.io/projects/rag.html">
 <meta property="og:url" content="https://junjianpan95.github.io/projects/rag.html">
@@ -16,9 +16,8 @@
 <header class="site-head">
   <div class="wrap inner">
     <a class="brand" href="../index.html">
-      <span class="mark">P</span>
+      <span class="mark">J</span>
       <span>JasonPan</span>
-      <span class="sub">Notes on Agents</span>
     </a>
     <nav class="nav" id="nav">
       <a href="../index.html#posts" aria-current="page">文章</a>
@@ -34,7 +33,7 @@
   <div class="wrap">
     <div class="crumb"><a href="../index.html">首页</a><span class="sep">/</span>文章 04</div>
     <span class="eyebrow">Hybrid Retrieval · 父子文档 · Reranker</span>
-    <h1>企业知识库 RAG：让答案能点回原文的第 12 页</h1>
+    <h1>基于 RAG 的企业平台知识问答系统</h1>
     <p class="lede">
       企业问制度的难点从来不是「能不能聊」，而是三件事同时成立：答案要准、出处要能点开、
       专业名词不能靠猜。这个项目在检索侧做混合召回与父子块回填，在生成侧强制引用标注，
@@ -70,6 +69,25 @@
         <div class="d">子块，重叠 50</div>
       </div>
     </div>
+
+    <dl class="star reveal">
+      <div class="row">
+        <dt><b>S</b>背景</dt>
+        <dd>企业问制度时，答不上、答错、引不到原文，这三种失败在用户眼里长得一样，都被归成「模型不行」。</dd>
+      </div>
+      <div class="row">
+        <dt><b>T</b>任务</dt>
+        <dd>自建解析、索引、检索、生成、评测全链路，硬指标是每条答案都能点回原文页码与配图。</dd>
+      </div>
+      <div class="row">
+        <dt><b>A</b>动作</dt>
+        <dd>语义感知分块 + Milvus 多路召回 + RRF 融合 + BGE-Reranker 精排 + 父子块回填；同一批检索结果反向构造训练数据，LoRA 微调 Qwen3 与 Reranker。</dd>
+      </div>
+      <div class="row">
+        <dt><b>R</b>结果</dt>
+        <dd>综合准确率 <em>90%+</em>，2 路 × Top10 召回、精排后只留 5 条进生成，支持页码与插图的可溯源问答。</dd>
+      </div>
+    </dl>
   </div>
 </div>
 

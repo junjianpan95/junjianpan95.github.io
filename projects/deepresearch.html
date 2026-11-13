@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DeepResearch 报告质量优化预研 — JasonPan</title>
+<title>DeerFlow 1.x 报告质量优化预研 — JasonPan</title>
 <meta name="description" content="把报告作为可持续检索、评审和精修的对象：Supervisor 调度 Researcher / Writer / Evaluator / Red Team，形成增量去噪的迭代回路。">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23171610'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='15' fill='%23F7F5F0' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230F1115'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='15' fill='%23FFFFFF' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="../assets/style.css">
 <link rel="canonical" href="https://junjianpan95.github.io/projects/deepresearch.html">
 <meta property="og:url" content="https://junjianpan95.github.io/projects/deepresearch.html">
@@ -16,9 +16,8 @@
 <header class="site-head">
   <div class="wrap inner">
     <a class="brand" href="../index.html">
-      <span class="mark">P</span>
+      <span class="mark">J</span>
       <span>JasonPan</span>
-      <span class="sub">Notes on Agents</span>
     </a>
     <nav class="nav" id="nav">
       <a href="../index.html#posts" aria-current="page">文章</a>
@@ -34,7 +33,7 @@
   <div class="wrap">
     <div class="crumb"><a href="../index.html">首页</a><span class="sep">/</span>文章 03</div>
     <span class="eyebrow">StateGraph · 自进化评估 · 红队对抗</span>
-    <h1>DeepResearch：把报告当成可以被反复检索和精修的对象</h1>
+    <h1>DeerFlow 1.x 报告质量优化预研</h1>
     <p class="lede">
       DeerFlow 1.x 的调研链路里，报告质量只在最后被评估一次，评完流程就结束了。
       这个预研想验证一件事：如果把「评估」从终点搬到循环里，
@@ -70,6 +69,25 @@
         <div class="d">Supervisor 决策轮次硬上限</div>
       </div>
     </div>
+
+    <dl class="star reveal">
+      <div class="row">
+        <dt><b>S</b>背景</dt>
+        <dd>DeerFlow 1.x 里报告质量只在链路末尾评估一次，评完流程就结束，计划、执行、成稿三段相对割裂，缺少针对报告内容本身的持续反馈。</dd>
+      </div>
+      <div class="row">
+        <dt><b>T</b>任务</dt>
+        <dd>做一个架构原型，验证把评估从终点搬进循环之后，报告能不能被持续检索、批评、重写，质量真的抬上去。</dd>
+      </div>
+      <div class="row">
+        <dt><b>A</b>动作</dt>
+        <dd>Draft / Writer、Supervisor、Researcher、Evaluator、Red Team 组成三层 StateGraph；用「定位缺口—定向研究—信息注入—草稿精炼」替代「检索后直接成稿」，主 agent 判断完成或触到 15 次决策上限才收尾。</dd>
+      </div>
+      <div class="row">
+        <dt><b>R</b>结果</dt>
+        <dd>端到端跑通联网研究到带引用 Markdown 成稿，内部样例综合质量 <em>8.84/10</em>，单份成稿覆盖 <em>34+</em> 个独立信源。</dd>
+      </div>
+    </dl>
   </div>
 </div>
 

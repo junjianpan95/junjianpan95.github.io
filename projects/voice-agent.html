@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>分层 Function Calling + MCP 的终端语音 Agent — JasonPan</title>
+<title>基于分层 Function Calling 与 MCP 的小度智能家居语音 Agent — JasonPan</title>
 <meta name="description" content="439 类意图、455 个技能：用小模型守门把候选工具收到 20–40 个，再交给 LLM 做精确的 function calling，MCP 负责把执行落到设备上。">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23171610'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='15' fill='%23F7F5F0' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230F1115'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='15' fill='%23FFFFFF' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="../assets/style.css">
 <link rel="canonical" href="https://junjianpan95.github.io/projects/voice-agent.html">
 <meta property="og:url" content="https://junjianpan95.github.io/projects/voice-agent.html">
@@ -16,9 +16,8 @@
 <header class="site-head">
   <div class="wrap inner">
     <a class="brand" href="../index.html">
-      <span class="mark">P</span>
+      <span class="mark">J</span>
       <span>JasonPan</span>
-      <span class="sub">Notes on Agents</span>
     </a>
     <nav class="nav" id="nav">
       <a href="../index.html#posts" aria-current="page">文章</a>
@@ -34,7 +33,7 @@
   <div class="wrap">
     <div class="crumb"><a href="../index.html">首页</a><span class="sep">/</span>文章 02</div>
     <span class="eyebrow">Function Calling · MCP · 意图召回</span>
-    <h1>分层 Function Calling + MCP：把 455 个技能收成 20–40 个候选</h1>
+    <h1>基于分层 Function Calling 与 MCP 的小度智能家居语音 Agent</h1>
     <p class="lede">
       智能终端的语音助手面临的不是「能不能回答」，而是「技能太多」。把全部工具塞进一次 LLM 调用，
       延迟、误匹配、无法拒识三个问题会同时爆掉。我们的解法是分层收敛：
@@ -70,6 +69,25 @@
         <div class="d">451 / 509 轮，242 条多轮 case</div>
       </div>
     </div>
+
+    <dl class="star reveal">
+      <div class="row">
+        <dt><b>S</b>背景</dt>
+        <dd>终端上 439 类意图、455 个技能，全量塞进一次调用既贵又容易误触发；而用户一句话通常只命中一两个技能。</dd>
+      </div>
+      <div class="row">
+        <dt><b>T</b>任务</dt>
+        <dd>负责 NLU 链路设计、意图与拒识模型训练、离线评测，并参与终端 MCP Server 原型与 Client / Server 联调，把「理解 → 调用 → 执行 → 播报」打通。</dd>
+      </div>
+      <div class="row">
+        <dt><b>A</b>动作</dt>
+        <dd>多轮改写 → BERT-Tiny 拒识 → 任务 / FAQ / 闲聊仲裁 → BERT-Large 召回 Top5 意图 → 动态收敛 20–40 个候选工具 → Function Calling → MCP 执行。</dd>
+      </div>
+      <div class="row">
+        <dt><b>R</b>结果</dt>
+        <dd>7400 条测试集 Top1 <em>85.73%</em>、Top5 <em>97.49%</em>；拒识 1332 条 <em>91.14%</em>；单轮 NLU 2212 条意图 <em>86.53%</em>、槽位全等 <em>91.59%</em>；多轮整轮正确率 <em>88.6%</em>。</dd>
+      </div>
+    </dl>
   </div>
 </div>
 

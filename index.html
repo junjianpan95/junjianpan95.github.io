@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>JasonPan · Agent 工程笔记</title>
-<meta name="description" content="JasonPan 的 Agent 工程笔记：AIOps 故障诊断、终端语音 Agent、DeepResearch 编排、企业知识库问答。">
-<meta property="og:title" content="JasonPan · Agent 工程笔记">
-<meta property="og:description" content="把 Agent 放进真实系统里。四篇项目笔记。">
+<title>JasonPan 的算法站 · 大模型与 Agent</title>
+<meta name="description" content="JasonPan 的算法站：多智能体强化学习、分层 Function Calling 与 MCP、深度调研报告生成、企业知识库 RAG。">
+<meta property="og:title" content="JasonPan 的算法站">
+<meta property="og:description" content="算法工程师的项目笔记：设计怎么来的、哪一步卡住、最后跑出什么数。">
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230F1115'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='14' fill='%23FFFFFF' text-anchor='middle'%3EJ%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="assets/style.css">
@@ -34,9 +34,9 @@
 
   <section class="masthead">
     <div class="wrap">
-      <p class="kicker">Agent Engineering</p>
-      <h1>把 Agent 放进<br>真实系统里。</h1>
-      <p class="sub">写一些 Agent 工程上的事：工具调用、强化学习、检索，以及它们在生产环境里失效的样子。</p>
+      <p class="kicker">Llm · Agent · Reinforcement Learning</p>
+      <h1>JasonPan 的算法站</h1>
+      <p class="sub">四个项目，从多智能体强化学习到检索增强。每个都写清楚：要解决什么、我做了什么、最后跑出什么数。</p>
     </div>
   </section>
 
@@ -50,8 +50,8 @@
           </div>
           <div class="post-body">
             <div class="post-meta">生产系统 · Multi-Agent</div>
-            <h2>故障诊断 Agent：把决策底座换成自训的 9B 小模型</h2>
-            <p>双 Agent 分级诊断与修复，再用 SFT + GRPO 把处置模型的决策能力练出来。</p>
+            <h2>基于 veRL+GRPO 的多智能体 AIOps Agentic RL 系统</h2>
+            <p>双 Agent 分级诊断与修复，再把 Hook 与 Schema 里现成的确定性判定改造成奖励，用 SFT + GRPO 训出能内网部署的 9B 处置模型。</p>
             <div class="post-foot">
               <span class="post-tag">veRL · GRPO · Reward</span>
               <span class="post-arrow">→</span>
@@ -65,8 +65,8 @@
           </div>
           <div class="post-body">
             <div class="post-meta">终端设备 · Function Calling</div>
-            <h2>455 个技能，只给模型看 20 个</h2>
-            <p>小模型把候选工具收窄，大模型在小集合里精确调用，MCP 把执行落到设备上。</p>
+            <h2>基于分层 Function Calling 与 MCP 的小度智能家居语音 Agent</h2>
+            <p>439 类意图、455 个技能全量注入不现实：小模型先把候选工具收窄到 20–40 个，大模型在小集合里精确调用，MCP 把执行落到设备上。</p>
             <div class="post-foot">
               <span class="post-tag">MCP · 意图召回 · 拒识</span>
               <span class="post-arrow">→</span>
@@ -80,8 +80,8 @@
           </div>
           <div class="post-body">
             <div class="post-meta">架构预研 · StateGraph</div>
-            <h2>把报告当成可以被反复精修的对象</h2>
-            <p>Supervisor 调度研究、写作、评审与红队，让「生成—批评—再决策」跑成回路。</p>
+            <h2>DeerFlow 1.x 报告质量优化预研</h2>
+            <p>把「检索后直接成稿」改成「定位缺口—定向研究—信息注入—草稿精炼」，让报告被反复检索、评审和精修。</p>
             <div class="post-foot">
               <span class="post-tag">Supervisor · 红队对抗</span>
               <span class="post-arrow">→</span>
@@ -95,8 +95,8 @@
           </div>
           <div class="post-body">
             <div class="post-meta">检索增强 · 全链路</div>
-            <h2>让答案能点回原文的第 12 页</h2>
-            <p>混合召回加父子块回填，生成时强制引用编号，末端能回到页码和配图。</p>
+            <h2>基于 RAG 的企业平台知识问答系统</h2>
+            <p>语义感知分块 + 混合召回 + 父子块回填，生成时强制引用编号，答案能点回原文页码与配图。</p>
             <div class="post-foot">
               <span class="post-tag">Hybrid Retrieval · Reranker</span>
               <span class="post-arrow">→</span>
@@ -110,9 +110,7 @@
 
   <section class="about" id="about">
     <div class="wrap">
-      <p>
-        JasonPan，做 Agent 工程。这里放项目笔记：设计怎么来的、哪一步卡住、最后跑出什么数。
-      </p>
+      <p class="slogan">JasonPan，算法工程师。追最新最前沿的大模型技术，也把每一步落进能跑起来的系统里。</p>
     </div>
   </section>
 
