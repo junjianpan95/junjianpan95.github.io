@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>分层 Function Calling + MCP 的终端语音 Agent — JasonPan</title>
+<meta name="description" content="439 类意图、455 个技能：用小模型守门把候选工具收到 20–40 个，再交给 LLM 做精确的 function calling，MCP 负责把执行落到设备上。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23171610'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='15' fill='%23F7F5F0' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="site-head">
+  <div class="wrap inner">
+    <a class="brand" href="../index.html">
+      <span class="mark">P</span>
+      <span>JasonPan</span>
+      <span class="sub">Notes on Agents</span>
+    </a>
+    <nav class="nav" id="nav">
+      <a href="../index.html#posts" aria-current="page">文章</a>
+      <a href="../index.html#about">关于</a>
+    </nav>
+    <button class="nav-toggle" type="button" aria-label="打开导航">菜单</button>
+  </div>
+</header>
+
+<main>
+
+<div class="doc-hero">
+  <div class="wrap">
+    <div class="crumb"><a href="../index.html">首页</a><span class="sep">/</span>文章 02</div>
+    <span class="eyebrow">Function Calling · MCP · 意图召回</span>
+    <h1>分层 Function Calling + MCP：把 455 个技能收成 20–40 个候选</h1>
+    <p class="lede">
+      智能终端的语音助手面临的不是「能不能回答」，而是「技能太多」。把全部工具塞进一次 LLM 调用，
+      延迟、误匹配、无法拒识三个问题会同时爆掉。我们的解法是分层收敛：
+      小模型把范围缩小，大模型在范围内做对，MCP 把结果落到设备上。
+    </p>
+
+    <div class="doc-meta">
+      <div class="m"><span class="k">场景</span><span class="v">智能终端语音助手</span></div>
+      <div class="m"><span class="k">形态</span><span class="v">离在线一体 · 2025 上半年</span></div>
+      <div class="m"><span class="k">规模</span><span class="v">439 类意图 · 455 个技能 · 14 个 MCP 端点</span></div>
+      <div class="m"><span class="k">评测</span><span class="v">7400 / 1332 / 2212 条三条测试集</span></div>
+    </div>
+
+    <div class="kpi reveal">
+      <div class="cell">
+        <span class="k">意图召回 acc@1</span>
+        <div class="v">0.857</div>
+        <div class="d">7400 条测试集</div>
+      </div>
+      <div class="cell">
+        <span class="k">意图召回 acc@5</span>
+        <div class="v">0.975</div>
+        <div class="d">决定工具子集的上限</div>
+      </div>
+      <div class="cell">
+        <span class="k">拒识准确率</span>
+        <div class="v">0.911</div>
+        <div class="d">1332 条测试集</div>
+      </div>
+      <div class="cell">
+        <span class="k">多轮整轮正确率</span>
+        <div class="v">88.6<span style="font-size:12px;color:var(--muted)">%</span></div>
+        <div class="d">451 / 509 轮，242 条多轮 case</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 问题 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="cols">
+      <div class="prose reveal">
+        <span class="eyebrow"><span class="idx">01</span>问题</span>
+        <h2>技能极多，但每句话只命中一两个</h2>
+        <p class="claim">
+          终端可控制的部件、可打开的应用、可调用的服务累计数百项。全量注入 LLM 的工具列表，
+          会产生三个直接后果：延迟不可接受、误匹配率上升、无法拒识。
+        </p>
+        <p>
+          工具定义本身就有十几万 token，首字延迟从百毫秒级涨到秒级；
+          相似技能（「打开车窗」/「打开天窗」/「打开车窗一点缝」）互相干扰；
+          而当用户说了一句不该响应的话——车内闲聊、电视声音、无意义短句——系统仍会强行匹配到某个技能。
+        </p>
+        <p>
+          这三个问题在工程上是同一个问题的三种表现：<strong>候选空间远大于一次调用能承载的容量</strong>。
+          所以解法不是换更大的模型，而是先做减法。
+        </p>
+      </div>
+
+      <div class="reveal">
+        <div class="note-box" style="margin-bottom:22px;">
+          <span class="h">分工原则</span>
+          <p>
+            <strong>小模型负责「把范围缩小」，大模型负责「在范围内做对」。</strong>
+            意图召回与拒识都是判别任务，用 BERT 量级的模型就能做到毫秒级，
+            没必要让一个生成模型去猜「这句话归哪一类」。
+          </p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>环节</th><th>模型</th><th>输出</th></tr></thead>
+            <tbody>
+              <tr><td>拒识</td><td class="num">BERT-Tiny</td><td>二分类，拦截无效输入</td></tr>
+              <tr><td>意图召回</td><td class="num">BERT-Large</td><td>439 类 → Top5</td></tr>
+              <tr><td>工具路由</td><td class="num">映射表</td><td>Top5 意图 → 20–40 工具</td></tr>
+              <tr><td>NLU</td><td class="num">LLM</td><td>工具名 + 槽位 JSON</td></tr>
+              <tr><td>执行</td><td class="num">MCP</td><td>设备侧真实调用</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 架构 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>端到端链路</h2>
+      <div class="note">从一句语音到设备动作，中间要过四个关卡：改写、拒识、召回、调用。</div>
+    </div>
+
+    <figure class="figure reveal">
+      <div class="figure-head">
+        <span class="t">图 1 · 分层收敛的语音 Agent 链路</span>
+        <span class="n">Pipeline</span>
+      </div>
+      <div class="fig-scroll">
+        <svg class="diagram" viewBox="0 0 1040 440" role="img" aria-label="语音 Agent 分层链路图">
+          <defs>
+            <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#B7C0D0"/>
+            </marker>
+          </defs>
+
+          <!-- row 1 -->
+          <g>
+            <rect class="node" x="24" y="40" width="220" height="56" rx="2"/>
+            <text class="nd-t" x="134" y="64" text-anchor="middle">语音输入 · ASR</text>
+            <text class="nd-s" x="134" y="81" text-anchor="middle">终端麦克风，流式识别</text>
+
+            <rect class="node" x="284" y="40" width="220" height="56" rx="2"/>
+            <text class="nd-t" x="394" y="64" text-anchor="middle">多轮 Query 改写</text>
+            <text class="nd-s" x="394" y="81" text-anchor="middle">补全省略与指代</text>
+
+            <rect class="node-a" x="544" y="40" width="220" height="56" rx="2"/>
+            <text class="nd-t" x="654" y="64" text-anchor="middle">拒识 · BERT-Tiny</text>
+            <text class="nd-s" x="654" y="81" text-anchor="middle">闲聊 / 无效输入拦截</text>
+
+            <rect class="node" x="804" y="40" width="220" height="56" rx="2"/>
+            <text class="nd-t" x="914" y="64" text-anchor="middle">任务 / FAQ / 闲聊 仲裁</text>
+            <text class="nd-s" x="914" y="81" text-anchor="middle">三条通路分流</text>
+
+            <path class="edge" d="M244,68 L284,68" marker-end="url(#ar3)"/>
+            <path class="edge" d="M504,68 L544,68" marker-end="url(#ar3)"/>
+            <path class="edge" d="M764,68 L804,68" marker-end="url(#ar3)"/>
+            <path class="edge" d="M914,96 L914,150 L134,150 L134,190" marker-end="url(#ar3)"/>
+          </g>
+
+          <!-- row 2 -->
+          <g>
+            <rect class="node-a" x="24" y="190" width="220" height="56" rx="2"/>
+            <text class="nd-t" x="134" y="214" text-anchor="middle">意图召回 · BERT-Large</text>
+            <text class="nd-s" x="134" y="231" text-anchor="middle">439 类 → Top5</text>
+
+            <rect class="node" x="284" y="190" width="220" height="56" rx="2"/>
+            <text class="nd-t" x="394" y="214" text-anchor="middle">工具子集</text>
+            <text class="nd-s" x="394" y="231" text-anchor="middle">20–40 个 / 共 455</text>
+
+            <rect class="node" x="544" y="190" width="220" height="56" rx="2"/>
+            <text class="nd-t" x="654" y="214" text-anchor="middle">Function Calling</text>
+            <text class="nd-s" x="654" y="231" text-anchor="middle">LLM 选工具 + 填槽位</text>
+
+            <rect class="node-b" x="804" y="190" width="220" height="56" rx="2"/>
+            <text class="nd-t" x="914" y="214" text-anchor="middle">MCP Client · Server</text>
+            <text class="nd-s" x="914" y="231" text-anchor="middle">Schema 适配与调用</text>
+
+            <path class="edge" d="M244,218 L284,218" marker-end="url(#ar3)"/>
+            <path class="edge" d="M504,218 L544,218" marker-end="url(#ar3)"/>
+            <path class="edge" d="M764,218 L804,218" marker-end="url(#ar3)"/>
+            <path class="edge" d="M914,246 L914,300 L134,300 L134,340" marker-end="url(#ar3)"/>
+          </g>
+
+          <!-- row 3 -->
+          <g>
+            <rect class="node-b" x="24" y="340" width="220" height="56" rx="2"/>
+            <text class="nd-t" x="134" y="364" text-anchor="middle">设备执行</text>
+            <text class="nd-s" x="134" y="381" text-anchor="middle">空调 / 车窗 / 音乐 / 导航</text>
+
+            <rect class="node" x="284" y="340" width="220" height="56" rx="2"/>
+            <text class="nd-t" x="394" y="364" text-anchor="middle">结果播报</text>
+            <text class="nd-s" x="394" y="381" text-anchor="middle">TTS + 话术模板</text>
+
+            <rect class="node" x="544" y="340" width="220" height="56" rx="2"/>
+            <text class="nd-t" x="654" y="364" text-anchor="middle">对话管理</text>
+            <text class="nd-s" x="654" y="381" text-anchor="middle">多轮槽位继承</text>
+
+            <rect class="node" x="804" y="340" width="220" height="56" rx="2"/>
+            <text class="nd-t" x="914" y="364" text-anchor="middle">兜底 · 澄清</text>
+            <text class="nd-s" x="914" y="381" text-anchor="middle">低置信度转反问</text>
+
+            <path class="edge" d="M244,368 L284,368" marker-end="url(#ar3)"/>
+            <path class="edge" d="M504,368 L544,368" marker-end="url(#ar3)"/>
+            <path class="edge" d="M764,368 L804,368" marker-end="url(#ar3)"/>
+          </g>
+
+          <!-- 回环到改写 -->
+          <path class="edge-d" d="M654,340 L654,300 L264,300 L264,130 L394,130 L394,96" marker-end="url(#ar3)"/>
+          <text class="lbl" x="464" y="292" text-anchor="middle">下一轮沿用槽位与对话上下文</text>
+        </svg>
+      </div>
+      <figcaption>
+        橙色节点是判别小模型负责的两个关卡：拒识与意图召回。它们决定了 LLM 看到什么——
+        如果拒识没拦住，后面整条链路都会在错误的前提上运转；如果召回漏了，LLM 再强也选不到正确工具。
+        蓝色节点是 MCP 层，负责把「工具名 + 参数」翻译成设备能执行的调用。
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ 设计 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>四个关键设计</h2>
+      <div class="note">前两个解决「选得对」，后两个解决「不乱选」和「执行得稳」。</div>
+    </div>
+
+    <div class="design-list reveal">
+      <div class="design">
+        <div class="dt"><span class="n">Design 01</span>用小模型把候选收到 Top5</div>
+        <div class="dd">
+          <p>
+            基于智能家居业务数据微调 BERT-Large 做 439 类意图分类，取 Top5 后按意图—工具映射表
+            收敛出 20–40 个候选工具，避免把 455 个工具全量注入 LLM。
+          </p>
+          <p>
+            这里的取舍很清楚：<strong>acc@5（0.975）而不是 acc@1 才是这条链路的天花板</strong>——
+            只要正确工具进了子集，LLM 还有机会在范围内选对；一旦漏在外面，后面全部失效。
+            所以训练时我把召回放在第一位，Top1 的 0.857 是顺带的结果。
+          </p>
+        </div>
+      </div>
+
+      <div class="design">
+        <div class="dt"><span class="n">Design 02</span>MCP 作为执行底座</div>
+        <div class="dd">
+          <p>
+            工具定义、参数 Schema、执行与错误返回统一走 MCP：Agent 侧只关心「调用哪个工具、传什么参数」，
+            设备差异被封装在 Server 里。参与了终端 MCP Server 的原型研发，完成工具 Schema 设计、
+            服务封装与 Client/Server 联调，打通「语义理解—工具调用—执行结果—播报」全链路。
+          </p>
+          <p>
+            这样做的直接好处是<strong>加技能不用改链路</strong>：新增一个设备能力，只需注册 Schema 与实现 Server 侧方法，
+            意图模型与映射表增量更新即可。
+          </p>
+        </div>
+      </div>
+
+      <div class="design">
+        <div class="dt"><span class="n">Design 03</span>拒识：先改写，再判断</div>
+        <div class="dd">
+          <p>
+            用 BERT-Tiny 做二分类拒识，拦截环境对话与无效输入。但单纯的拒识会误伤一种情况：
+            用户上一轮问「主卧空调多少度」，下一轮只说「调高一点」——这句话单独看很像无效输入。
+          </p>
+          <p>
+            所以拒识放在<strong>多轮 Query 改写之后</strong>：先把省略与指代补全成完整意图，再做相关性复核。
+            这个顺序调换把「省略追问被误拦截」的情况压了下来，也是多轮整轮正确率能到 88.6% 的原因之一。
+          </p>
+        </div>
+      </div>
+
+      <div class="design">
+        <div class="dt"><span class="n">Design 04</span>槽位标准化与执行前校验</div>
+        <div class="dd">
+          <p>
+            LLM 输出的槽位是自由文本——「二十六度」「26」「26℃」都可能出现。
+            执行前统一做数值归一、单位换算与枚举对齐，再校验参数是否在设备支持的范围内，
+            不在范围内就转澄清而不是硬发命令。
+          </p>
+          <p>
+            这一步看起来琐碎，但它决定了系统是「偶尔能演示」还是「可以给用户用」。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 效果 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>实测效果</h2>
+      <div class="note">四个环节各自独立评测，样本量不同，不能当成一次端到端压测。</div>
+    </div>
+
+    <div class="chart reveal" style="margin-bottom:28px;">
+      <div class="chart-head">
+        <span class="t">分环节准确率（各环节自建评测集）</span>
+        <div class="legend">
+          <span><i style="background:#2A4FD7"></i>判别小模型</span>
+          <span><i style="background:#6E84A8"></i>LLM 链路</span>
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="grp-name">判别小模型 <span class="sub">毫秒级，决定候选集</span></div>
+        <div class="bar"><span class="nm">意图 acc@1</span><div class="track"><span class="fill" data-w="85.7" style="background:#2A4FD7"></span></div><span class="val">0.857</span></div>
+        <div class="bar is-best"><span class="nm">意图 acc@5</span><div class="track"><span class="fill" data-w="97.5" style="background:#2A4FD7"></span></div><span class="val">0.975</span></div>
+        <div class="bar"><span class="nm">拒识准确率</span><div class="track"><span class="fill" data-w="91.1" style="background:#2A4FD7"></span></div><span class="val">0.911</span></div>
+      </div>
+
+      <div class="grp">
+        <div class="grp-name">LLM 链路 <span class="sub">在子集内选工具与槽位</span></div>
+        <div class="bar"><span class="nm">NLU 意图</span><div class="track"><span class="fill" data-w="86.5" style="background:#6E84A8"></span></div><span class="val">0.865</span></div>
+        <div class="bar"><span class="nm">NLU 槽位全等</span><div class="track"><span class="fill" data-w="91.6" style="background:#6E84A8"></span></div><span class="val">0.916</span></div>
+        <div class="bar"><span class="nm">多轮整轮</span><div class="track"><span class="fill" data-w="88.6" style="background:#6E84A8"></span></div><span class="val">0.886</span></div>
+      </div>
+    </div>
+
+    <div class="table-wrap reveal" style="margin-bottom:28px;">
+      <table>
+        <thead>
+          <tr><th>评测环节</th><th>指标</th><th class="num">结果</th><th class="num">样本量</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>意图召回（判别模型）</td><td>acc@1 / acc@5</td><td class="num best">0.857 / 0.975</td><td class="num">7400</td></tr>
+          <tr><td>拒识（判别模型）</td><td>accuracy</td><td class="num best">0.911</td><td class="num">1332</td></tr>
+          <tr><td>单轮 NLU（LLM）</td><td>意图 / 槽位全等</td><td class="num best">0.865 / 0.916</td><td class="num">2212</td></tr>
+          <tr><td>多轮端到端</td><td>整轮正确率</td><td class="num best">0.886（451/509 轮）</td><td class="num">242 条 case</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="cols">
+      <div class="reveal">
+        <div class="sample">
+          <div class="sample-bar">
+            <span>一轮真实链路 · 已脱敏</span>
+            <span>home / ac</span>
+          </div>
+          <div class="sample-body">
+            <div class="line"><span class="who">用户</span><span class="txt">把主卧空调调到二十六度</span></div>
+            <div class="line"><span class="who">召回</span><span class="txt dim">Top5：SetAC 0.94 · SetTemp 0.88 · SetMode 0.61 …</span></div>
+            <div class="line"><span class="who">子集</span><span class="txt dim">28 个工具（房间类 + 温控类）</span></div>
+            <div class="line"><span class="who">调用</span><span class="txt"><span class="chip">SetAC</span> {"room":"主卧","temp":26}</span></div>
+            <div class="line"><span class="who">播报</span><span class="txt">好的，主卧空调已调到 26 度</span></div>
+            <div class="line" style="margin-top:10px;"><span class="who">用户</span><span class="txt">再低一点</span></div>
+            <div class="line"><span class="who">改写</span><span class="txt dim">→ 把主卧空调温度再调低一点</span></div>
+            <div class="line"><span class="who">调用</span><span class="txt"><span class="chip">SetAC</span> {"room":"主卧","temp":24}<span class="dim">（槽位继承）</span></span></div>
+            <div class="line" style="margin-top:10px;"><span class="who">用户</span><span class="txt">今天大盘怎么样</span></div>
+            <div class="line"><span class="who">拒识</span><span class="txt"><span class="hl">拦截</span> · 不在技能范围，回兜底话术</span></div>
+          </div>
+        </div>
+        <p style="font-size:12.5px;color:var(--muted);margin-top:12px;">
+          示例按真实输出的结构重写，设备与槽位为演示数据。
+        </p>
+      </div>
+
+      <div class="reveal">
+        <div class="note-box" style="margin-bottom:22px;">
+          <span class="h">为什么 acc@5 比 acc@1 更重要</span>
+          <p>
+            多层链路的误差是<strong>串联</strong>的。意图召回漏掉正确类，LLM 那一层无论多准都无法挽回；
+            反过来，只要正确工具在子集里，LLM 有能力把它挑出来。
+          </p>
+          <p>
+            这也是为什么多轮整轮正确率（0.886）会低于单轮 NLU 的槽位准确率（0.916）——
+            每一轮都要对，误差会被轮数放大。要提升端到端，优先修的是<strong>第一层</strong>，而不是换更大的模型。
+          </p>
+        </div>
+        <div class="note-box">
+          <span class="h">边界</span>
+          <p>
+            四组数字来自不同环节、不同时间点的独立评测，不是同一次全链路压测的结果。
+            端到端一档按「一轮内意图与全部槽位均正确」的人工标注口径统计，
+            样本为 242 条多轮 case 共 509 轮。测试集规模有限，且场景集中在智能家居，
+            对开放域闲聊的拒识表现没有充分覆盖。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 我的部分 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="prose reveal" style="max-width:820px;">
+      <span class="eyebrow"><span class="idx">05</span>我的部分</span>
+      <h2 style="margin-bottom:16px;">做了什么，没做什么</h2>
+      <p>
+        我在这条链路上负责 NLU 的整体设计、意图与拒识模型的训练、离线评测体系，
+        并参与终端 MCP Server 的原型研发与 Client/Server 联调。
+      </p>
+      <p>
+        需要说清楚的是：<strong>意图分类与拒识模型是在已有业务数据上微调的</strong>，
+        数据标注与清洗是团队协作的结果；MCP 协议本身的接入由平台侧提供，
+        我做的是工具 Schema 设计与服务封装这一层。<strong>设备侧的真实执行</strong>不在我的范围内——
+        我负责的是「理解对了，并且把正确的调用发出去了」，执行是否成功由设备端回执确认。
+      </p>
+      <p class="muted" style="color:var(--muted);font-size:14px;">
+        这个项目后来也影响了我做 AIOps Agent 的思路：先算清楚候选空间有多大，
+        再决定哪一层用什么模型——这个判断顺序在那边同样成立。
+      </p>
+    </div>
+
+    <div class="pager reveal" style="margin-top:30px;">
+      <a href="aiops.html">
+        <span class="dir">← 上一个</span>
+        <span class="ttl">AIOps 故障诊断 Agent · SFT + Agentic RL</span>
+      </a>
+      <a class="next" href="deepresearch.html">
+        <span class="dir">下一个 →</span>
+        <span class="ttl">DeepResearch 报告质量优化预研</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <div class="foot-top">
+      <div class="foot-note">
+        文中示例对话与设备数据已脱敏；指标来自离线评测集，样本量见正文。
+      </div>
+      <div class="foot-links">
+        <a href="../index.html">首页</a>
+        <a href="../index.html#posts">全部文章</a>
+      </div>
+    </div>
+    <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--muted);">© <span id="yr">2026</span> JasonPan</div>
+  </div>
+</footer>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

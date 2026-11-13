@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img" aria-label="AIOps 诊断链路示意图">
+  <defs>
+    <linearGradient id="abg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F6F8FC"/><stop offset="1" stop-color="#E7EDF7"/>
+    </linearGradient>
+    <pattern id="adots" width="20" height="20" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.5" fill="#C6CFE0" opacity=".55"/>
+    </pattern>
+    <marker id="aar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,1 L9,5 L0,9 z" fill="#9FADC8"/>
+    </marker>
+  </defs>
+
+  <rect width="640" height="400" fill="url(#abg)"/>
+  <rect width="640" height="400" fill="url(#adots)"/>
+
+  <!-- alert pill -->
+  <g>
+    <rect x="56" y="52" width="132" height="30" rx="15" fill="#FFFFFF" stroke="#DCE2EE"/>
+    <circle cx="76" cy="67" r="5" fill="#E5484D"/>
+    <rect x="90" y="63" width="80" height="7" rx="3.5" fill="#DDE3EF"/>
+  </g>
+
+  <!-- console window -->
+  <g>
+    <rect x="56" y="106" width="232" height="188" rx="14" fill="#FFFFFF" stroke="#DCE2EE"/>
+    <circle cx="78" cy="126" r="4" fill="#D8DEEA"/>
+    <circle cx="92" cy="126" r="4" fill="#D8DEEA"/>
+    <circle cx="106" cy="126" r="4" fill="#D8DEEA"/>
+    <line x1="56" y1="142" x2="288" y2="142" stroke="#EDF0F6"/>
+
+    <rect x="78" y="160" width="56" height="6" rx="3" fill="#C9D6EF"/>
+    <rect x="140" y="160" width="96" height="6" rx="3" fill="#E7ECF6"/>
+
+    <rect x="78" y="180" width="30" height="6" rx="3" fill="#2A4FD7" opacity=".85"/>
+    <rect x="114" y="180" width="120" height="6" rx="3" fill="#E7ECF6"/>
+
+    <rect x="78" y="200" width="44" height="6" rx="3" fill="#C9D6EF"/>
+    <rect x="128" y="200" width="88" height="6" rx="3" fill="#E7ECF6"/>
+
+    <rect x="78" y="220" width="22" height="6" rx="3" fill="#2A4FD7" opacity=".85"/>
+    <rect x="106" y="220" width="70" height="6" rx="3" fill="#E7ECF6"/>
+
+    <rect x="78" y="244" width="148" height="28" rx="8" fill="#F3F6FC"/>
+    <rect x="88" y="254" width="64" height="8" rx="4" fill="#CFDAF2"/>
+  </g>
+
+  <!-- arrow -->
+  <path d="M296,200 L344,200" stroke="#9FADC8" stroke-width="1.4" fill="none" marker-end="url(#aar)"/>
+
+  <!-- repair panel -->
+  <g>
+    <rect x="356" y="126" width="228" height="148" rx="14" fill="#FFFFFF" stroke="#DCE2EE"/>
+    <rect x="378" y="150" width="72" height="8" rx="4" fill="#D5DEEF"/>
+    <g>
+      <rect x="378" y="176" width="184" height="24" rx="7" fill="#F3F6FC"/>
+      <circle cx="392" cy="188" r="4" fill="#C3CBDC"/>
+      <rect x="404" y="184" width="86" height="8" rx="4" fill="#DDE4F1"/>
+    </g>
+    <g>
+      <rect x="378" y="206" width="184" height="24" rx="7" fill="#EDF1FA" stroke="#2A4FD7" stroke-opacity=".35"/>
+      <circle cx="392" cy="218" r="4" fill="#2A4FD7"/>
+      <rect x="404" y="214" width="108" height="8" rx="4" fill="#C3D0EF"/>
+    </g>
+    <g>
+      <rect x="378" y="236" width="184" height="24" rx="7" fill="#F3F6FC"/>
+      <circle cx="392" cy="248" r="4" fill="#C3CBDC"/>
+      <rect x="404" y="244" width="64" height="8" rx="4" fill="#DDE4F1"/>
+    </g>
+  </g>
+
+  <!-- result badge -->
+  <g>
+    <rect x="440" y="298" width="144" height="34" rx="17" fill="#2A4FD7"/>
+    <path d="M458,315 L464,321 L476,309" stroke="#FFFFFF" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="486" y="311" width="78" height="8" rx="4" fill="#FFFFFF" opacity=".75"/>
+  </g>
+  <path d="M470,274 L470,292" stroke="#9FADC8" stroke-width="1.4" marker-end="url(#aar)"/>
+</svg>

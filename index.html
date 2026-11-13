@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JasonPan · Agent 工程笔记</title>
+<meta name="description" content="JasonPan 的 Agent 工程笔记：AIOps 故障诊断、终端语音 Agent、DeepResearch 编排、企业知识库问答。">
+<meta property="og:title" content="JasonPan · Agent 工程笔记">
+<meta property="og:description" content="把 Agent 放进真实系统里。四篇项目笔记。">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230F1115'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='14' fill='%23FFFFFF' text-anchor='middle'%3EJ%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="site-head">
+  <div class="wrap inner">
+    <a class="brand" href="index.html">
+      <span class="mark">J</span>
+      <span>JasonPan</span>
+    </a>
+    <nav class="nav" id="nav">
+      <a href="#posts" aria-current="page">文章</a>
+      <a href="#about">关于</a>
+    </nav>
+    <button class="nav-toggle" type="button" aria-label="打开导航">菜单</button>
+  </div>
+</header>
+
+<main>
+
+  <section class="masthead">
+    <div class="wrap">
+      <p class="kicker">Agent Engineering</p>
+      <h1>把 Agent 放进<br>真实系统里。</h1>
+      <p class="sub">写一些 Agent 工程上的事：工具调用、强化学习、检索，以及它们在生产环境里失效的样子。</p>
+    </div>
+  </section>
+
+  <section class="posts" id="posts">
+    <div class="wrap">
+      <div class="cards">
+
+        <a class="post" href="projects/aiops.html">
+          <div class="post-media">
+            <img src="assets/covers/aiops.svg" width="640" height="400" alt="AIOps 诊断与修复链路示意图">
+          </div>
+          <div class="post-body">
+            <div class="post-meta">生产系统 · Multi-Agent</div>
+            <h2>故障诊断 Agent：把决策底座换成自训的 9B 小模型</h2>
+            <p>双 Agent 分级诊断与修复，再用 SFT + GRPO 把处置模型的决策能力练出来。</p>
+            <div class="post-foot">
+              <span class="post-tag">veRL · GRPO · Reward</span>
+              <span class="post-arrow">→</span>
+            </div>
+          </div>
+        </a>
+
+        <a class="post" href="projects/voice-agent.html">
+          <div class="post-media">
+            <img src="assets/covers/voice.svg" width="640" height="400" alt="语音 Agent 分层收敛示意图">
+          </div>
+          <div class="post-body">
+            <div class="post-meta">终端设备 · Function Calling</div>
+            <h2>455 个技能，只给模型看 20 个</h2>
+            <p>小模型把候选工具收窄，大模型在小集合里精确调用，MCP 把执行落到设备上。</p>
+            <div class="post-foot">
+              <span class="post-tag">MCP · 意图召回 · 拒识</span>
+              <span class="post-arrow">→</span>
+            </div>
+          </div>
+        </a>
+
+        <a class="post" href="projects/deepresearch.html">
+          <div class="post-media">
+            <img src="assets/covers/deepresearch.svg" width="640" height="400" alt="DeepResearch 多智能体编排示意图">
+          </div>
+          <div class="post-body">
+            <div class="post-meta">架构预研 · StateGraph</div>
+            <h2>把报告当成可以被反复精修的对象</h2>
+            <p>Supervisor 调度研究、写作、评审与红队，让「生成—批评—再决策」跑成回路。</p>
+            <div class="post-foot">
+              <span class="post-tag">Supervisor · 红队对抗</span>
+              <span class="post-arrow">→</span>
+            </div>
+          </div>
+        </a>
+
+        <a class="post" href="projects/rag.html">
+          <div class="post-media">
+            <img src="assets/covers/rag.svg" width="640" height="400" alt="RAG 检索与引用示意图">
+          </div>
+          <div class="post-body">
+            <div class="post-meta">检索增强 · 全链路</div>
+            <h2>让答案能点回原文的第 12 页</h2>
+            <p>混合召回加父子块回填，生成时强制引用编号，末端能回到页码和配图。</p>
+            <div class="post-foot">
+              <span class="post-tag">Hybrid Retrieval · Reranker</span>
+              <span class="post-arrow">→</span>
+            </div>
+          </div>
+        </a>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="about" id="about">
+    <div class="wrap">
+      <p>
+        JasonPan，做 Agent 工程。这里放项目笔记：设计怎么来的、哪一步卡住、最后跑出什么数。
+      </p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <div class="foot-row">
+      <span>© <span id="yr">2026</span> JasonPan</span>
+      <span class="mono">Static site · no tracking</span>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

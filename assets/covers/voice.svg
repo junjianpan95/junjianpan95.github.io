@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img" aria-label="语音 Agent 分层收敛示意图">
+  <defs>
+    <linearGradient id="vbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F6F8FC"/><stop offset="1" stop-color="#E7EDF7"/>
+    </linearGradient>
+    <pattern id="vdots" width="20" height="20" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.5" fill="#C6CFE0" opacity=".55"/>
+    </pattern>
+    <marker id="var" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,1 L9,5 L0,9 z" fill="#9FADC8"/>
+    </marker>
+  </defs>
+
+  <rect width="640" height="400" fill="url(#vbg)"/>
+  <rect width="640" height="400" fill="url(#vdots)"/>
+
+  <!-- layer 1: many skills -->
+  <g fill="#C7D2E6">
+    <circle cx="152" cy="70" r="5"/><circle cx="184" cy="70" r="5"/><circle cx="216" cy="70" r="5"/>
+    <circle cx="248" cy="70" r="5"/><circle cx="280" cy="70" r="5"/><circle cx="312" cy="70" r="5"/>
+    <circle cx="344" cy="70" r="5"/><circle cx="376" cy="70" r="5"/><circle cx="408" cy="70" r="5"/>
+    <circle cx="440" cy="70" r="5"/><circle cx="472" cy="70" r="5"/><circle cx="504" cy="70" r="5"/>
+    <circle cx="168" cy="98" r="5"/><circle cx="200" cy="98" r="5"/><circle cx="232" cy="98" r="5"/>
+    <circle cx="264" cy="98" r="5"/><circle cx="296" cy="98" r="5"/><circle cx="328" cy="98" r="5"/>
+    <circle cx="360" cy="98" r="5"/><circle cx="392" cy="98" r="5"/><circle cx="424" cy="98" r="5"/>
+    <circle cx="456" cy="98" r="5"/><circle cx="488" cy="98" r="5"/>
+  </g>
+  <g fill="#C7D2E6" opacity=".55">
+    <circle cx="184" cy="46" r="4"/><circle cx="248" cy="46" r="4"/><circle cx="312" cy="46" r="4"/>
+    <circle cx="376" cy="46" r="4"/><circle cx="440" cy="46" r="4"/><circle cx="504" cy="46" r="4"/>
+  </g>
+
+  <!-- converging lines -->
+  <g stroke="#C3CEE2" stroke-width="1" fill="none" opacity=".9">
+    <path d="M296,108 L296,132"/>
+    <path d="M216,108 L286,132"/>
+    <path d="M376,108 L306,132"/>
+    <path d="M152,108 L276,132"/>
+    <path d="M440,108 L316,132"/>
+  </g>
+
+  <!-- layer 2: recall -->
+  <rect x="176" y="132" width="240" height="58" rx="12" fill="#FFFFFF" stroke="#DCE2EE"/>
+  <g>
+    <circle cx="206" cy="161" r="14" fill="#EDF1FA"/>
+    <circle cx="206" cy="161" r="5" fill="#2A4FD7"/>
+    <rect x="232" y="150" width="104" height="8" rx="4" fill="#D5DEEF"/>
+    <rect x="232" y="166" width="66" height="7" rx="3.5" fill="#E7ECF6"/>
+  </g>
+  <g>
+    <rect x="352" y="148" width="46" height="26" rx="13" fill="#2A4FD7"/>
+    <rect x="362" y="157" width="26" height="8" rx="4" fill="#FFFFFF" opacity=".8"/>
+  </g>
+
+  <!-- arrow -->
+  <path d="M296,196 L296,224" stroke="#9FADC8" stroke-width="1.4" marker-end="url(#var)"/>
+
+  <!-- layer 3: candidates -->
+  <g>
+    <rect x="146" y="232" width="112" height="46" rx="10" fill="#FFFFFF" stroke="#DCE2EE"/>
+    <rect x="160" y="248" width="60" height="8" rx="4" fill="#D5DEEF"/>
+    <rect x="160" y="262" width="84" height="6" rx="3" fill="#EDF1F8"/>
+
+    <rect x="270" y="232" width="112" height="46" rx="10" fill="#EDF1FA" stroke="#2A4FD7" stroke-opacity=".4"/>
+    <rect x="284" y="248" width="52" height="8" rx="4" fill="#B9C8EA"/>
+    <rect x="284" y="262" width="80" height="6" rx="3" fill="#D9E1F4"/>
+
+    <rect x="394" y="232" width="112" height="46" rx="10" fill="#FFFFFF" stroke="#DCE2EE"/>
+    <rect x="408" y="248" width="66" height="8" rx="4" fill="#D5DEEF"/>
+    <rect x="408" y="262" width="46" height="6" rx="3" fill="#EDF1F8"/>
+  </g>
+
+  <!-- layer 4: device -->
+  <path d="M202,286 L202,308" stroke="#C3CEE2" stroke-width="1.2" stroke-dasharray="3 3"/>
+  <path d="M326,286 L326,308" stroke="#C3CEE2" stroke-width="1.2" stroke-dasharray="3 3"/>
+  <path d="M450,286 L450,308" stroke="#C3CEE2" stroke-width="1.2" stroke-dasharray="3 3"/>
+
+  <g>
+    <rect x="196" y="316" width="260" height="40" rx="20" fill="#FFFFFF" stroke="#DCE2EE"/>
+    <circle cx="222" cy="336" r="9" fill="#EDF1FA"/>
+    <path d="M218,332 a4,4 0 0 1 8,0 v6 a4,4 0 0 1 -8,0 z" fill="#8FA0BE"/>
+    <path d="M222,344 l0,5" stroke="#8FA0BE" stroke-width="1.6"/>
+    <rect x="244" y="330" width="96" height="7" rx="3.5" fill="#DDE4F1"/>
+    <rect x="244" y="342" width="56" height="6" rx="3" fill="#EDF1F8"/>
+    <rect x="372" y="326" width="64" height="20" rx="10" fill="#EAF3EE"/>
+    <circle cx="386" cy="336" r="4" fill="#3E9C6B"/>
+    <rect x="396" y="332" width="30" height="8" rx="4" fill="#BFDCCB"/>
+  </g>
+</svg>

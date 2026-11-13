@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DeepResearch 报告质量优化预研 — JasonPan</title>
+<meta name="description" content="把报告作为可持续检索、评审和精修的对象：Supervisor 调度 Researcher / Writer / Evaluator / Red Team，形成增量去噪的迭代回路。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23171610'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='15' fill='%23F7F5F0' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="site-head">
+  <div class="wrap inner">
+    <a class="brand" href="../index.html">
+      <span class="mark">P</span>
+      <span>JasonPan</span>
+      <span class="sub">Notes on Agents</span>
+    </a>
+    <nav class="nav" id="nav">
+      <a href="../index.html#posts" aria-current="page">文章</a>
+      <a href="../index.html#about">关于</a>
+    </nav>
+    <button class="nav-toggle" type="button" aria-label="打开导航">菜单</button>
+  </div>
+</header>
+
+<main>
+
+<div class="doc-hero">
+  <div class="wrap">
+    <div class="crumb"><a href="../index.html">首页</a><span class="sep">/</span>文章 03</div>
+    <span class="eyebrow">StateGraph · 自进化评估 · 红队对抗</span>
+    <h1>DeepResearch：把报告当成可以被反复检索和精修的对象</h1>
+    <p class="lede">
+      DeerFlow 1.x 的调研链路里，报告质量只在最后被评估一次，评完流程就结束了。
+      这个预研想验证一件事：如果把「评估」从终点搬到循环里，
+      让报告持续被检索、批评、重写，质量能不能真正抬上去。
+    </p>
+
+    <div class="doc-meta">
+      <div class="m"><span class="k">场景</span><span class="v">深度调研报告生成</span></div>
+      <div class="m"><span class="k">形态</span><span class="v">架构原型 / 预研 · 2025 上半年</span></div>
+      <div class="m"><span class="k">基线</span><span class="v">DeerFlow 1.x 调研链路</span></div>
+      <div class="m"><span class="k">交付</span><span class="v">原型 + 实验样例 + 运行轨迹</span></div>
+    </div>
+
+    <div class="kpi reveal">
+      <div class="cell">
+        <span class="k">综合质量分</span>
+        <div class="v">8.84<span style="font-size:12px;color:var(--muted)">/10</span></div>
+        <div class="d">内部实验样例，三维评估加权</div>
+      </div>
+      <div class="cell">
+        <span class="k">独立信源</span>
+        <div class="v">34<span style="font-size:12px;color:var(--muted)">+</span></div>
+        <div class="d">同一份成稿覆盖的信源数</div>
+      </div>
+      <div class="cell">
+        <span class="k">编排角色</span>
+        <div class="v">5</div>
+        <div class="d">Supervisor + 四个专职 Agent</div>
+      </div>
+      <div class="cell">
+        <span class="k">决策上限</span>
+        <div class="v">15</div>
+        <div class="d">Supervisor 决策轮次硬上限</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 问题 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="cols">
+      <div class="prose reveal">
+        <span class="eyebrow"><span class="idx">01</span>问题</span>
+        <h2>计划、执行、成稿三段是割裂的</h2>
+        <p class="claim">
+          原流程是「规划 → 检索 → 写作 → 评估」的直线。评估只发生在最后，
+          它产出的分数不会回流到任何一步——报告写完了，旅程就结束了。
+        </p>
+        <p>
+          这导致两个具体问题。第一，<strong>检索是按计划执行的，不是按缺口驱动的</strong>：
+          计划里没想到的角度，后面不会补；第二，<strong>质量问题没有归因</strong>：
+          最后评出来 7 分，但没人知道是缺信源、逻辑断，还是引用不对。
+        </p>
+        <p>
+          我想验证的假设很简单：如果把报告本身作为循环里的中间产物，
+          让「缺口识别」和「批评」成为下一轮检索与改写的输入，那么同一套模型能产出更好的成稿。
+        </p>
+      </div>
+
+      <div class="reveal">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>对比项</th><th>原链路</th><th>本预研</th></tr></thead>
+            <tbody>
+              <tr><td>评估位置</td><td>终点，只跑一次</td><td class="best">每一轮都评</td></tr>
+              <tr><td>检索依据</td><td>初始计划</td><td class="best">当前缺口</td></tr>
+              <tr><td>成稿方式</td><td>一次生成</td><td class="best">累计 findings 重写</td></tr>
+              <tr><td>质量反馈</td><td>不回流</td><td class="best">注入下一轮决策</td></tr>
+              <tr><td>终止条件</td><td>流程走完</td><td class="best">判定 / 无工具 / 15 轮</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note-box" style="margin-top:22px;">
+          <span class="h">一个类比</span>
+          <p>
+            这套「先定位缺口、再定向补信息、然后重写」的流程，形式上很像扩散模型的去噪过程：
+            每一轮不追求一次到位，只求把当前草稿里最明显的那部分噪声减掉。
+            区别在于噪声是语义层面的——缺口、矛盾、无支撑的论断。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 架构 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>编排结构</h2>
+      <div class="note">Supervisor 是唯一的中枢，四个专职 Agent 都是它的工具，不是它的对等节点。</div>
+    </div>
+
+    <figure class="figure reveal">
+      <div class="figure-head">
+        <span class="t">图 1 · 三层 StateGraph 与决策循环</span>
+        <span class="n">StateGraph</span>
+      </div>
+      <div class="fig-scroll">
+        <svg class="diagram" viewBox="0 0 1040 600" role="img" aria-label="DeepResearch StateGraph 编排图">
+          <defs>
+            <marker id="ar4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#B7C0D0"/>
+            </marker>
+            <marker id="ar4d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#2A4FD7"/>
+            </marker>
+          </defs>
+
+          <!-- query -->
+          <rect class="node" x="60" y="70" width="170" height="62" rx="2"/>
+          <text class="nd-t" x="145" y="95" text-anchor="middle">研究问题</text>
+          <text class="nd-s" x="145" y="112" text-anchor="middle">一句话 Query</text>
+          <path class="edge" d="M230,101 L360,101" marker-end="url(#ar4)"/>
+
+          <!-- 1 researcher -->
+          <g>
+            <rect class="node" x="360" y="70" width="200" height="62" rx="2"/>
+            <text class="nd-t" x="460" y="95" text-anchor="middle">Researcher</text>
+            <text class="nd-s" x="460" y="112" text-anchor="middle">缺口 → 子查询 → 信源</text>
+            <circle cx="360" cy="70" r="9.5" fill="#2A4FD7"/>
+            <text x="360" y="74" text-anchor="middle" fill="#fff" font-size="10" font-family="monospace">1</text>
+          </g>
+
+          <!-- hub -->
+          <rect class="node-a" x="360" y="232" width="200" height="76" rx="2"/>
+          <text class="nd-t" x="460" y="258" text-anchor="middle">Supervisor · 决策</text>
+          <text class="nd-s" x="460" y="276" text-anchor="middle">决策 → 工具执行 → 反馈注入</text>
+          <text class="nd-s" x="460" y="292" text-anchor="middle">每轮只选一个动作</text>
+
+          <!-- 2 writer -->
+          <g>
+            <rect class="node" x="760" y="240" width="200" height="62" rx="2"/>
+            <text class="nd-t" x="860" y="265" text-anchor="middle">Writer</text>
+            <text class="nd-s" x="860" y="282" text-anchor="middle">注入 findings 重写</text>
+            <circle cx="760" cy="240" r="9.5" fill="#2A4FD7"/>
+            <text x="760" y="244" text-anchor="middle" fill="#fff" font-size="10" font-family="monospace">2</text>
+          </g>
+
+          <!-- 4 red team -->
+          <g>
+            <rect class="node" x="60" y="240" width="200" height="62" rx="2"/>
+            <text class="nd-t" x="160" y="265" text-anchor="middle">Red Team</text>
+            <text class="nd-s" x="160" y="282" text-anchor="middle">缺口 / 一致性 / 逻辑</text>
+            <circle cx="60" cy="240" r="9.5" fill="#2A4FD7"/>
+            <text x="60" y="244" text-anchor="middle" fill="#fff" font-size="10" font-family="monospace">4</text>
+          </g>
+
+          <!-- 3 evaluator -->
+          <g>
+            <rect class="node" x="560" y="430" width="200" height="62" rx="2"/>
+            <text class="nd-t" x="660" y="455" text-anchor="middle">Evaluator</text>
+            <text class="nd-s" x="660" y="472" text-anchor="middle">全面性 / 准确性 / 连贯性</text>
+            <circle cx="560" cy="430" r="9.5" fill="#2A4FD7"/>
+            <text x="560" y="434" text-anchor="middle" fill="#fff" font-size="10" font-family="monospace">3</text>
+          </g>
+
+          <!-- spokes -->
+          <path class="edge" d="M380,232 L380,132" marker-start="url(#ar4)" marker-end="url(#ar4)"/>
+          <text class="lbl" x="470" y="185" text-anchor="middle">派发检索 · 回填 findings</text>
+
+          <path class="edge" d="M260,271 L360,271" marker-start="url(#ar4)" marker-end="url(#ar4)"/>
+          <text class="lbl" x="310" y="261" text-anchor="middle">送审 · 收批评</text>
+
+          <path class="edge" d="M560,270 L760,270" marker-start="url(#ar4)" marker-end="url(#ar4)"/>
+          <text class="lbl" x="660" y="261" text-anchor="middle">注入 findings + 当前草稿</text>
+
+          <path class="edge" d="M460,308 L460,370 L620,370 L620,430" marker-start="url(#ar4)" marker-end="url(#ar4)"/>
+          <text class="lbl" x="472" y="356" text-anchor="start">提交草稿 → 取评分</text>
+
+          <path class="edge" d="M860,302 L860,520" marker-end="url(#ar4)"/>
+
+          <!-- bottom -->
+          <rect class="node" x="24" y="520" width="500" height="56" rx="2"/>
+          <text class="nd-t" x="274" y="544" text-anchor="middle">终止条件（三者任一命中即停）</text>
+          <text class="nd-s" x="274" y="561" text-anchor="middle">主 agent 判定完成 · 无工具调用 · 15 次决策上限</text>
+
+          <rect class="node-b" x="544" y="520" width="472" height="56" rx="2"/>
+          <text class="nd-t" x="780" y="544" text-anchor="middle">State · 跨层状态</text>
+          <text class="nd-s" x="780" y="561" text-anchor="middle">TypedDict 消息 / Pydantic 校验 / Reducer 聚合</text>
+
+          <path class="edge-d" d="M660,492 L660,520" marker-end="url(#ar4d)"/>
+        </svg>
+      </div>
+      <figcaption>
+        编号即一轮典型循环的顺序：① 定向检索 → ② 草稿精修 → ③ 三维评分 → ④ 红队批评 → 回到 Supervisor 再决策。
+        注意 Supervisor 与四个 Agent 之间都是双向箭头：它下发任务，也接收反馈，
+        决策依据是「当前 State 里还缺什么」，而不是预设的流程步骤。
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ 设计 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>四个关键设计</h2>
+      <div class="note">这个项目最值得写的不是「用了多智能体」，而是每个角色的输入输出被怎么定义。</div>
+    </div>
+
+    <div class="design-list reveal">
+      <div class="design">
+        <div class="dt"><span class="n">Design 01</span>Supervisor 是唯一的中枢</div>
+        <div class="dd">
+          <p>
+            三层 StateGraph 的调用结构里，只有 Supervisor 拥有调度权：它读 State、选一个动作、
+            调用对应 Agent、把结果注入回 State。四个专职 Agent（Researcher、Writer、Evaluator、Red Team）
+            互不直接通信——这样避免了多智能体系统里常见的「互相等待」和「循环对喷」。
+          </p>
+          <p>
+            Writer 与 Evaluator 之间的顺序也是 Supervisor 决定的：有时候先评再改（信息已经够，只是没写好），
+            有时候先补再评（缺口太大，改了也白改）。
+          </p>
+        </div>
+      </div>
+
+      <div class="design">
+        <div class="dt"><span class="n">Design 02</span>增量去噪，而不是重写</div>
+        <div class="dd">
+          <p>
+            Writer 不是「根据一个问题写一份报告」，而是「根据累计 findings 和当前草稿，产出修订稿」。
+            这个输入设计很关键：它让 Writer 有能力保留上一轮已经写对的部分，只改有问题的地方，
+            否则每一轮都会退化成从零重写，反而越改越糟。
+          </p>
+          <p>
+            Researcher 的输入同样不是原始问题，而是<strong>被指认出来的缺口</strong>——
+            「缺少 2023 年之后的数据」「这一段没有引用」比「再查一下」有用得多。
+          </p>
+        </div>
+      </div>
+
+      <div class="design">
+        <div class="dt"><span class="n">Design 03</span>评估与红队，职责分离</div>
+        <div class="dd">
+          <p>
+            Evaluator 从全面性、准确性、连贯性三个维度打分并记录，它的输出是<strong>数值</strong>；
+            Red Team 则专门针对完整性缺口、主题一致性、逻辑自洽性生成<strong>批评</strong>。
+          </p>
+          <p>
+            分开的原因很实际：让一个角色既打分又提意见，它往往会给一个中庸的分数加一句正确的废话。
+            拆开之后，评分用于判断「还要不要再迭代」，批评用于指导「下一轮改什么」，
+            两者进入 State 的字段也不同。
+          </p>
+        </div>
+      </div>
+
+      <div class="design">
+        <div class="dt"><span class="n">Design 04</span>状态管理与终止</div>
+        <div class="dd">
+          <p>
+            跨层状态用 TypedDict 定义结构、Pydantic 做运行时校验、Reducer 负责研究结果的聚合
+            （多路检索返回的片段要合并去重，而不是覆盖）。
+          </p>
+          <p>
+            终止条件设了三重：主 agent 判断已完成、本轮无工具调用、或达到 15 次 Supervisor 决策上限。
+            第三条是成本兜底——没有硬上限的反思循环在生产环境里是不可接受的，
+            它会为了 0.1 分反复跑二十轮。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 效果 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>效果</h2>
+      <div class="note">这是预研，不是产品。指标来自内部实验样例，没有跑标准 benchmark。</div>
+    </div>
+
+    <div class="cols" style="margin-bottom:28px;">
+      <div class="reveal">
+        <div class="sample">
+          <div class="sample-bar">
+            <span>成稿片段 · 带引用</span>
+            <span>sample 01</span>
+          </div>
+          <div class="sample-body">
+            <div style="font-size:13px;color:var(--muted);font-family:var(--mono);letter-spacing:.1em;margin-bottom:12px;">## 3. 训练侧的主要分歧</div>
+            <p style="margin-bottom:10px;">
+              在冷启动数据的构造上，两类做法分歧明显：一类主张用强模型批量合成，
+              另一类坚持从真实交互里筛。<span class="chip">[7]</span>
+              前者成本低但分布偏平，后者噪声大而覆盖真实长尾。<span class="chip">[12]</span>
+            </p>
+            <p style="margin-bottom:10px;" class="dim">
+              值得注意的是，<span class="hl">已有工作对「拒绝采样」的阈值设定几乎没有公开讨论</span><span class="chip">[19]</span>，
+              而这恰恰决定了样本的难度分布——这一点在本轮调研中未能找到直接证据。
+            </p>
+            <p class="dim" style="font-size:12px;">
+              —— 标注为灰色的句子是 Red Team 指出的缺口，Writer 保留了它并显式说明「未找到证据」，
+              而不是编一个来源补上。
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="reveal">
+        <div class="note-box" style="margin-bottom:22px;">
+          <span class="h">一个意外发现</span>
+          <p>
+            最有价值的改动不是加了 Evaluator，而是让 Writer 在<strong>证据不足时保留不确定性</strong>。
+            原链路倾向于把话说满，因为没人会因为它编造而惩罚它；
+            有了红队之后，编造会被下一轮指认出来，于是模型学会了写「这一点没有找到可靠来源」。
+          </p>
+          <p>
+            从报告「好看」的角度这是退步，从可用性角度这是进步——一份知道自己哪里不确定的调研报告，
+            比一份通篇自信的报告有用得多。
+          </p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>评估维度</th><th>看什么</th></tr></thead>
+            <tbody>
+              <tr><td>全面性</td><td>是否覆盖问题的各个侧面</td></tr>
+              <tr><td>准确性</td><td>论断是否有引用支撑</td></tr>
+              <tr><td>连贯性</td><td>章节之间是否有推进关系</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="note-box reveal" style="max-width:820px;">
+      <span class="h">边界</span>
+      <p>
+        8.84/10 是内部实验样例的口径——同一批样例、同一套评分提示词，由 Evaluator 打分，
+        <strong>不是人工盲评，也不是公开 benchmark 上的分数</strong>。34 个信源是单份成稿的统计。
+        作为预研，它的价值在于验证了「评估回流」这个机制可行，
+        以及沉淀了可复现的 Notebook 运行轨迹与样例报告；它没有回答「相比基线的提升有多大」这个问题——
+        严格的对照实验需要固定模型版本、固定信源与人工标注，这在实习期内没做完。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 我的部分 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="prose reveal" style="max-width:820px;">
+      <span class="eyebrow"><span class="idx">05</span>我的部分</span>
+      <h2 style="margin-bottom:16px;">做了什么，没做什么</h2>
+      <p>
+        这个预研由我独立完成：从读 DeerFlow 1.x 的调研链路、找出现在单节点评估的断点，
+        到设计 Supervisor 调度结构、实现四个角色的输入输出与状态管理，再到跑通端到端样例、
+        沉淀运行轨迹与样例报告。
+      </p>
+      <p>
+        它<strong>没有进入生产</strong>——这是一次预研，结论以原型与实验样例的形式交付，
+        用于判断「报告质量优化」这条路值不值得投入。
+        也因此，这个项目里最硬的部分不是模型效果，而是<strong>流程设计</strong>：
+        谁在什么时候拿到什么输入、什么时候该停。
+      </p>
+    </div>
+
+    <div class="pager reveal" style="margin-top:30px;">
+      <a href="voice-agent.html">
+        <span class="dir">← 上一个</span>
+        <span class="ttl">分层 Function Calling + MCP 的终端语音 Agent</span>
+      </a>
+      <a class="next" href="rag.html">
+        <span class="dir">下一个 →</span>
+        <span class="ttl">企业知识库 RAG 问答系统</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <div class="foot-top">
+      <div class="foot-note">
+        文中报告片段为结构演示，引用编号不对应真实文献。
+      </div>
+      <div class="foot-links">
+        <a href="../index.html">首页</a>
+        <a href="../index.html#posts">全部文章</a>
+      </div>
+    </div>
+    <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--muted);">© <span id="yr">2026</span> JasonPan</div>
+  </div>
+</footer>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

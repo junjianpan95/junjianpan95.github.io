@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>企业知识库 RAG 问答系统 — JasonPan</title>
+<meta name="description" content="BM25 + BGE-M3 混合召回、父子块回填、RRF 融合与精排，生成侧强制引用编号，答案可回溯到页码与原图。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23171610'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='15' fill='%23F7F5F0' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="site-head">
+  <div class="wrap inner">
+    <a class="brand" href="../index.html">
+      <span class="mark">P</span>
+      <span>JasonPan</span>
+      <span class="sub">Notes on Agents</span>
+    </a>
+    <nav class="nav" id="nav">
+      <a href="../index.html#posts" aria-current="page">文章</a>
+      <a href="../index.html#about">关于</a>
+    </nav>
+    <button class="nav-toggle" type="button" aria-label="打开导航">菜单</button>
+  </div>
+</header>
+
+<main>
+
+<div class="doc-hero">
+  <div class="wrap">
+    <div class="crumb"><a href="../index.html">首页</a><span class="sep">/</span>文章 04</div>
+    <span class="eyebrow">Hybrid Retrieval · 父子文档 · Reranker</span>
+    <h1>企业知识库 RAG：让答案能点回原文的第 12 页</h1>
+    <p class="lede">
+      企业问制度的难点从来不是「能不能聊」，而是三件事同时成立：答案要准、出处要能点开、
+      专业名词不能靠猜。这个项目在检索侧做混合召回与父子块回填，在生成侧强制引用标注，
+      并用同一批检索结果反向构造训练数据。
+    </p>
+
+    <div class="doc-meta">
+      <div class="m"><span class="k">场景</span><span class="v">企业制度与文档问答</span></div>
+      <div class="m"><span class="k">形态</span><span class="v">全链路自建 · 2026</span></div>
+      <div class="m"><span class="k">链路</span><span class="v">解析 · 索引 · 检索 · 生成 · 评测</span></div>
+      <div class="m"><span class="k">语料</span><span class="v">3.4w 问答 · PDF 制度文档</span></div>
+    </div>
+
+    <div class="kpi reveal">
+      <div class="cell">
+        <span class="k">综合准确率</span>
+        <div class="v">90<span style="font-size:12px;color:var(--muted)">%+</span></div>
+        <div class="d">自建评测集口径</div>
+      </div>
+      <div class="cell">
+        <span class="k">召回策略</span>
+        <div class="v">2 <span style="font-size:12px;color:var(--muted)">路 × Top10</span></div>
+        <div class="d">BM25 + BGE-M3 混合</div>
+      </div>
+      <div class="cell">
+        <span class="k">送进生成的上下文</span>
+        <div class="v">Top5</div>
+        <div class="d">精排后只留 5 条</div>
+      </div>
+      <div class="cell">
+        <span class="k">切块粒度</span>
+        <div class="v">256<span style="font-size:12px;color:var(--muted)"> token</span></div>
+        <div class="d">子块，重叠 50</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 问题 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="cols">
+      <div class="prose reveal">
+        <span class="eyebrow"><span class="idx">01</span>问题</span>
+        <h2>三种失败方式，看起来都像「模型不行」</h2>
+        <p class="claim">
+          制度条款写法固定、术语密集；一个条款被切碎后语义残缺；答案编得通顺但没法核实。
+          这三种失败，其实分别对应检索、切分、生成三个环节的设计缺陷。
+        </p>
+        <p>
+          最常见的误判是把它们都当成「模型不够强」：换个更大的模型，症状会缓解，但不会消失——
+          因为问题不在生成侧。纯向量检索会把「差旅住宿标准」和「会议住宿标准」混在一起，
+          条款号对不上；按长度硬切会把一句话的答案切在边界上；提示词不约束引用，模型就会自由发挥。
+        </p>
+      </div>
+
+      <div class="reveal">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>实际困难</th><th>常见失败</th><th>本项目的做法</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>术语密集、条款号固定</td>
+                <td>同义条款混在一起</td>
+                <td class="best">BM25 + 向量两路互不替代</td>
+              </tr>
+              <tr>
+                <td>条款被切碎后语义残缺</td>
+                <td>答案被切在边界上</td>
+                <td class="best">先父块、再子块，命中回填</td>
+              </tr>
+              <tr>
+                <td>一句话对应三五个段落</td>
+                <td>Top-K 噪声淹没信息</td>
+                <td class="best">精排后只留 5 条</td>
+              </tr>
+              <tr>
+                <td>答案无法核实</td>
+                <td>编造条款与数字</td>
+                <td class="best">强制引用编号 + 后处理</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 架构 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>两条链路</h2>
+      <div class="note">离线建库与在线问答共用同一套分块结果和同一个精排模型。</div>
+    </div>
+
+    <figure class="figure reveal">
+      <div class="figure-head">
+        <span class="t">图 1 · 离线建库与在线问答</span>
+        <span class="n">Pipeline</span>
+      </div>
+      <div class="fig-scroll">
+        <svg class="diagram" viewBox="0 0 1040 660" role="img" aria-label="RAG 双链路架构图">
+          <defs>
+            <marker id="ar5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#B7C0D0"/>
+            </marker>
+            <marker id="ar5d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#2A4FD7"/>
+            </marker>
+          </defs>
+
+          <!-- Lane A -->
+          <text class="grp-t" x="24" y="28">离线建库 · INDEX BUILD</text>
+          <rect class="grp" x="12" y="36" width="1016" height="196" rx="2"/>
+          <g>
+            <rect class="node" x="24" y="60" width="170" height="54" rx="2"/>
+            <text class="nd-t" x="109" y="83" text-anchor="middle">PDF 知识文档</text>
+            <text class="nd-s" x="109" y="100" text-anchor="middle">制度 / 流程 / 手册</text>
+
+            <rect class="node" x="234" y="60" width="170" height="54" rx="2"/>
+            <text class="nd-t" x="319" y="83" text-anchor="middle">逐页解析</text>
+            <text class="nd-s" x="319" y="100" text-anchor="middle">正文 + 配图 + 图注</text>
+
+            <rect class="node" x="444" y="60" width="170" height="54" rx="2"/>
+            <text class="nd-t" x="529" y="83" text-anchor="middle">LLM 清洗</text>
+            <text class="nd-s" x="529" y="100" text-anchor="middle">去噪 · 按标题归并</text>
+
+            <rect class="node-a" x="654" y="60" width="190" height="54" rx="2"/>
+            <text class="nd-t" x="749" y="83" text-anchor="middle">语义切分</text>
+            <text class="nd-s" x="749" y="100" text-anchor="middle">先父块，再子块</text>
+
+            <path class="edge" d="M194,87 L234,87" marker-end="url(#ar5)"/>
+            <path class="edge" d="M404,87 L444,87" marker-end="url(#ar5)"/>
+            <path class="edge" d="M614,87 L654,87" marker-end="url(#ar5)"/>
+
+            <rect class="node" x="444" y="164" width="160" height="50" rx="2"/>
+            <text class="nd-t" x="524" y="185" text-anchor="middle">MongoDB</text>
+            <text class="nd-s" x="524" y="201" text-anchor="middle">父块原文</text>
+
+            <rect class="node" x="624" y="164" width="160" height="50" rx="2"/>
+            <text class="nd-t" x="704" y="185" text-anchor="middle">Milvus</text>
+            <text class="nd-s" x="704" y="201" text-anchor="middle">dense + sparse</text>
+
+            <rect class="node" x="804" y="164" width="160" height="50" rx="2"/>
+            <text class="nd-t" x="884" y="185" text-anchor="middle">BM25</text>
+            <text class="nd-s" x="884" y="201" text-anchor="middle">jieba · pickle</text>
+
+            <path class="edge" d="M749,114 L524,164" marker-end="url(#ar5)"/>
+            <path class="edge" d="M749,114 L704,164" marker-end="url(#ar5)"/>
+            <path class="edge" d="M749,114 L884,164" marker-end="url(#ar5)"/>
+          </g>
+
+          <!-- Lane B -->
+          <text class="grp-t" x="24" y="262">在线问答 · QUERY</text>
+          <rect class="grp" x="12" y="270" width="1016" height="228" rx="2"/>
+
+          <rect class="node" x="24" y="322" width="150" height="60" rx="2"/>
+          <text class="nd-t" x="99" y="346" text-anchor="middle">用户问题</text>
+          <text class="nd-s" x="99" y="363" text-anchor="middle">自然语言提问</text>
+
+          <rect class="node" x="214" y="288" width="200" height="54" rx="2"/>
+          <text class="nd-t" x="314" y="311" text-anchor="middle">BM25 召回</text>
+          <text class="nd-s" x="314" y="328" text-anchor="middle">Top10 · 命中术语与编号</text>
+
+          <rect class="node" x="214" y="378" width="200" height="54" rx="2"/>
+          <text class="nd-t" x="314" y="401" text-anchor="middle">BGE-M3 混合召回</text>
+          <text class="nd-s" x="314" y="418" text-anchor="middle">稠密 + 稀疏，RRF 融合</text>
+
+          <rect class="node-a" x="464" y="322" width="170" height="60" rx="2"/>
+          <text class="nd-t" x="549" y="346" text-anchor="middle">合并 · 父块回填</text>
+          <text class="nd-s" x="549" y="363" text-anchor="middle">按 parent_id 去重</text>
+
+          <rect class="node-a" x="684" y="322" width="150" height="60" rx="2"/>
+          <text class="nd-t" x="759" y="346" text-anchor="middle">reranker 精排</text>
+          <text class="nd-s" x="759" y="363" text-anchor="middle">保留 Top5</text>
+
+          <rect class="node" x="684" y="418" width="150" height="60" rx="2"/>
+          <text class="nd-t" x="759" y="442" text-anchor="middle">Qwen3 生成</text>
+          <text class="nd-s" x="759" y="459" text-anchor="middle">强制引用编号</text>
+
+          <rect class="node" x="884" y="418" width="140" height="60" rx="2"/>
+          <text class="nd-t" x="954" y="442" text-anchor="middle">答案 · 页码 · 配图</text>
+          <text class="nd-s" x="954" y="459" text-anchor="middle">可点回原文</text>
+
+          <path class="edge" d="M174,352 L194,352 L194,315 L214,315" marker-end="url(#ar5)"/>
+          <path class="edge" d="M194,352 L194,405 L214,405" marker-end="url(#ar5)"/>
+          <path class="edge" d="M414,315 L440,315 L440,352 L464,352" marker-end="url(#ar5)"/>
+          <path class="edge" d="M414,405 L440,405 L440,352 L464,352" marker-end="url(#ar5)"/>
+          <path class="edge" d="M634,352 L684,352" marker-end="url(#ar5)"/>
+          <path class="edge" d="M759,382 L759,418" marker-end="url(#ar5)"/>
+          <path class="edge" d="M834,448 L884,448" marker-end="url(#ar5)"/>
+
+          <!-- index -> query -->
+          <path class="edge-d" d="M444,189 L424,189 L424,256 L314,256 L314,288" marker-end="url(#ar5d)"/>
+
+          <!-- Lane C -->
+          <text class="grp-t" x="24" y="522">领域微调 · FINE-TUNE</text>
+          <rect class="grp" x="12" y="530" width="1016" height="112" rx="2"/>
+
+          <rect class="node" x="24" y="560" width="270" height="56" rx="2"/>
+          <text class="nd-t" x="159" y="584" text-anchor="middle">同一批真实检索结果</text>
+          <text class="nd-s" x="159" y="601" text-anchor="middle">自动构造两套训练数据</text>
+
+          <rect class="node" x="354" y="542" width="320" height="44" rx="2"/>
+          <text class="nd-t" x="514" y="569" text-anchor="middle">LoRA 微调 Qwen3 · 生成侧</text>
+
+          <rect class="node" x="354" y="598" width="320" height="44" rx="2"/>
+          <text class="nd-t" x="514" y="625" text-anchor="middle">pairwise 精排 · 检索侧</text>
+
+          <path class="edge" d="M294,578 L324,578 L324,564 L354,564" marker-end="url(#ar5)"/>
+          <path class="edge" d="M294,590 L324,590 L324,620 L354,620" marker-end="url(#ar5)"/>
+        </svg>
+      </div>
+      <figcaption>
+        上半部分把 PDF 变成三种索引：父块原文存 MongoDB 供回填，稠密与稀疏向量存 Milvus，
+        关键词倒排存 BM25。下半部分是问答时的处理顺序——两路召回各取 Top10，按 parent_id 合并去重，
+        精排后只留 5 条作为生成上下文。
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ 设计 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>四个关键设计</h2>
+      <div class="note">四件事分别解决：召回不到、召回了但切断、召回了但太吵、答了但没法核实。</div>
+    </div>
+
+    <div class="design-list reveal">
+      <div class="design">
+        <div class="dt"><span class="n">Design 01</span>两路召回，互不替代</div>
+        <div class="dd">
+          <p>
+            BM25 用 jieba 分词 + 停用词过滤，索引持久化为 pickle，负责命中罕见术语、编号与专有名词——
+            这类词向量检索经常「语义相近但没命中」。
+          </p>
+          <p>
+            BGE-M3 同时产出稠密与稀疏向量写入 Milvus，用 RRFRanker 融合：稠密负责语义泛化，
+            稀疏负责词面覆盖，比单路稠密稳定。两路各取 Top10，在合并时按 parent_id 去重。
+          </p>
+        </div>
+      </div>
+
+      <div class="design">
+        <div class="dt"><span class="n">Design 02</span>先按意思分段，再按长度切片</div>
+        <div class="dd">
+          <p>
+            切分顺序是「先语义、后长度」：PDF 逐页抽取 → LLM 清洗（去换行、按标题归并）→
+            句子切分 → m3e-small 向量化 → 层次聚类 → 每组约 10 句形成<strong>父块</strong> →
+            父块内再用 RecursiveCharacterTextSplitter 切成 256 token、重叠 50 的<strong>子块</strong>。
+          </p>
+          <p>
+            检索命中子块，回答时取回整个父块。这样既保持了检索的粒度精度，又避免了上下文被切断。
+            另外两个工程细节：文中出现 <code>###</code> 标题时直接按标题断章，不再聚类
+            （制度类文档的章节边界比聚类结果可靠）；父块超过 512 字符不进检索集，但仍存 MongoDB 供回填。
+          </p>
+        </div>
+      </div>
+
+      <div class="design">
+        <div class="dt"><span class="n">Design 03</span>精排与强制引用</div>
+        <div class="dd">
+          <p>
+            融合去重后通常还有十几条，交给微调过的 bge-reranker-v2-m3（XLM-RoBERTa，24 层，
+            max_length 4096，fp16）逐对打分，保留 Top-5。
+          </p>
+          <p>
+            生成侧在提示词里强制 <code>{答案}【引用编号】</code> 的格式，后处理再把编号解析成
+            <strong>页码与原文配图</strong>。这是「可溯源」的关键一步：用户看到的不是一串 chunk，
+            而是「《差旅管理办法》第 12 页，图 3-1」。
+          </p>
+        </div>
+      </div>
+
+      <div class="design">
+        <div class="dt"><span class="n">Design 04</span>用检索结果反向造训练数据</div>
+        <div class="dd">
+          <p>
+            一条脚本产出两份训练集，都来自同一批真实检索结果：<strong>SFT 集</strong>用于把通用 Qwen3
+            拉到企业语料上；<strong>pairwise 集</strong>用于精排——同一条 query 下，第 1 条上下文标 2、
+            末两条之一标 1、未入选的召回结果标 0。
+          </p>
+          <p>
+            三档标注是为了让精排学到「部分相关」这一档，而不是非 0 即 1。
+            这一步的成本几乎为零（数据本来就在链路里产生），但对效果的影响比换模型大。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 效果 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>效果</h2>
+      <div class="note">回答带页码与配图，检索过程可逐段打印，便于定位是召回不行还是生成不行。</div>
+    </div>
+
+    <div class="cols">
+      <div class="reveal">
+        <div class="sample">
+          <div class="sample-bar">
+            <span>一次问答 · 虚构演示文本</span>
+            <span>query 01</span>
+          </div>
+          <div class="sample-body">
+            <div class="line"><span class="who">提问</span><span class="txt">出差住宿标准是多少？超标了怎么办？</span></div>
+            <div class="line"><span class="who">召回</span><span class="txt dim">BM25 10 · 混合召回 10 → 合并去重 14 → 精排 5</span></div>
+            <div class="line" style="margin-top:12px;"><span class="who">回答</span><span class="txt">
+              一线城市住宿标准为<strong>每人每晚不超过 600 元</strong>，其他城市不超过 450 元<span class="chip">[1]</span>。
+              超标部分需在出差前提交事前审批，未审批的超标金额不予报销<span class="chip">[2]</span>。
+              同一行程多人同行的，按实际入住房间数分别计算<span class="chip">[1]</span>。
+            </span></div>
+            <div class="line" style="margin-top:12px;"><span class="who">出处</span><span class="txt dim">
+              [1] 《差旅管理办法》第 4 章 · p.12<br>
+              [2] 《费用报销实施细则》3.2 节 · p.7 · 附图 3-1
+            </span></div>
+          </div>
+        </div>
+        <p style="font-size:12.5px;color:var(--muted);margin-top:12px;">
+          示例中的制度条文为虚构演示文本，不代表任何真实企业规定。
+        </p>
+      </div>
+
+      <div class="reveal">
+        <div class="note-box" style="margin-bottom:22px;">
+          <span class="h">怎么定位问题</span>
+          <p>
+            评测用了两条线：<strong>RAGas</strong> 的 LLMContextRecall 与 LLMContextPrecisionWithReference，
+            衡量召回上下文本身的覆盖度与信噪比。
+          </p>
+          <p>
+            两套分数都低于 0.6 的样本会被打印出来——看几条就能判断该调召回还是调提示词。
+            把「检索不行」和「生成不行」分开定位，是这个项目里最省时间的一步。
+          </p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>关键参数</th><th class="num">取值</th></tr></thead>
+            <tbody>
+              <tr><td>召回条数</td><td class="num">BM25 10 / 混合 10</td></tr>
+              <tr><td>精排保留</td><td class="num">Top 5</td></tr>
+              <tr><td>子块大小 / 重叠</td><td class="num">256 / 50 token</td></tr>
+              <tr><td>父块上限</td><td class="num">512 字符</td></tr>
+              <tr><td>精排模型</td><td class="num">bge-reranker-v2-m3</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="note-box reveal" style="max-width:820px;margin-top:28px;">
+      <span class="h">边界</span>
+      <p>
+        90%+ 是在自建评测集上的口径，评测集由业务问答构造，与真实用户提问的分布存在差异；
+        仓库内不含任何企业文档语料与模型权重，代码中出现的制度条文均为虚构演示文本。
+        这套链路对<strong>结构性强的文档</strong>（制度、流程、手册）效果好，
+        对图表密集或跨文档推理的场景没有做充分验证。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 我的部分 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="prose reveal" style="max-width:820px;">
+      <span class="eyebrow"><span class="idx">05</span>我的部分</span>
+      <h2 style="margin-bottom:16px;">做了什么，没做什么</h2>
+      <p>
+        这是一个个人项目，从解析、切分、建库、检索、生成到评测全链路自己实现。
+        其中精排模型基于开源 RAG-Retrieval 仓库微调，分块与检索的工程实现是独立完成的。
+      </p>
+      <p>
+        它让我对 RAG 的判断变得具体：<strong>大部分「答不准」的问题出在切分和召回，不在生成</strong>。
+        换更强的生成模型通常只是把编造说得更自信；先把父块取回来、把术语命中补上，收益要大得多。
+      </p>
+    </div>
+
+    <div class="pager reveal" style="margin-top:30px;">
+      <a href="deepresearch.html">
+        <span class="dir">← 上一个</span>
+        <span class="ttl">DeepResearch 报告质量优化预研</span>
+      </a>
+      <a class="next" href="../index.html#work">
+        <span class="dir">返回 →</span>
+        <span class="ttl">全部项目</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <div class="foot-top">
+      <div class="foot-note">
+        文中制度条文与问答示例为虚构演示文本。
+      </div>
+      <div class="foot-links">
+        <a href="../index.html">首页</a>
+        <a href="../index.html#posts">全部文章</a>
+      </div>
+    </div>
+    <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--muted);">© <span id="yr">2026</span> JasonPan</div>
+  </div>
+</footer>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

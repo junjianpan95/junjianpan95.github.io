@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img" aria-label="RAG 检索与引用示意图">
+  <defs>
+    <linearGradient id="rbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F6F8FC"/><stop offset="1" stop-color="#E7EDF7"/>
+    </linearGradient>
+    <pattern id="rdots" width="20" height="20" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.5" fill="#C6CFE0" opacity=".55"/>
+    </pattern>
+    <marker id="rar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,1 L9,5 L0,9 z" fill="#9FADC8"/>
+    </marker>
+  </defs>
+
+  <rect width="640" height="400" fill="url(#rbg)"/>
+  <rect width="640" height="400" fill="url(#rdots)"/>
+
+  <!-- document -->
+  <g>
+    <rect x="52" y="112" width="132" height="176" rx="10" fill="#FFFFFF" stroke="#DCE2EE"/>
+    <path d="M160,112 l24,24 h-24 z" fill="#EDF1F8" stroke="#DCE2EE"/>
+    <rect x="70" y="136" width="66" height="8" rx="4" fill="#D5DEEF"/>
+    <g fill="#E7ECF6">
+      <rect x="70" y="158" width="94" height="6" rx="3"/>
+      <rect x="70" y="172" width="86" height="6" rx="3"/>
+      <rect x="70" y="186" width="98" height="6" rx="3"/>
+      <rect x="70" y="200" width="62" height="6" rx="3"/>
+      <rect x="70" y="220" width="90" height="6" rx="3"/>
+      <rect x="70" y="234" width="80" height="6" rx="3"/>
+      <rect x="70" y="248" width="96" height="6" rx="3"/>
+    </g>
+    <rect x="70" y="186" width="98" height="6" rx="3" fill="#2A4FD7" opacity=".28"/>
+  </g>
+
+  <path d="M196,200 L226,200" stroke="#9FADC8" stroke-width="1.4" marker-end="url(#rar)"/>
+
+  <!-- chunks -->
+  <g>
+    <rect x="238" y="132" width="112" height="40" rx="8" fill="#FFFFFF" stroke="#DCE2EE"/>
+    <rect x="252" y="146" width="62" height="6" rx="3" fill="#DDE4F1"/>
+    <rect x="252" y="158" width="44" height="5" rx="2.5" fill="#EDF1F8"/>
+
+    <rect x="238" y="182" width="112" height="40" rx="8" fill="#EDF1FA" stroke="#2A4FD7" stroke-opacity=".4"/>
+    <rect x="252" y="196" width="70" height="6" rx="3" fill="#B9C8EA"/>
+    <rect x="252" y="208" width="50" height="5" rx="2.5" fill="#D9E1F4"/>
+
+    <rect x="238" y="232" width="112" height="40" rx="8" fill="#FFFFFF" stroke="#DCE2EE"/>
+    <rect x="252" y="246" width="56" height="6" rx="3" fill="#DDE4F1"/>
+    <rect x="252" y="258" width="66" height="5" rx="2.5" fill="#EDF1F8"/>
+  </g>
+
+  <g stroke="#C3CEE2" stroke-width="1.2" fill="none">
+    <path d="M170,196 L214,152 L238,152"/>
+    <path d="M170,200 L238,202"/>
+    <path d="M170,206 L214,252 L238,252"/>
+  </g>
+
+  <path d="M366,202 L396,202" stroke="#9FADC8" stroke-width="1.4" marker-end="url(#rar)"/>
+
+  <!-- answer bubble -->
+  <g>
+    <rect x="408" y="118" width="184" height="120" rx="14" fill="#FFFFFF" stroke="#DCE2EE"/>
+    <rect x="428" y="140" width="112" height="8" rx="4" fill="#D5DEEF"/>
+    <g fill="#E7ECF6">
+      <rect x="428" y="160" width="140" height="6" rx="3"/>
+      <rect x="428" y="174" width="122" height="6" rx="3"/>
+      <rect x="428" y="188" width="136" height="6" rx="3"/>
+      <rect x="428" y="202" width="84" height="6" rx="3"/>
+    </g>
+    <rect x="518" y="188" width="16" height="12" rx="2" fill="#2A4FD7" opacity=".22"/>
+    <rect x="428" y="218" width="52" height="6" rx="3" fill="#C3D0EF"/>
+    <path d="M456,238 l0,14 l10,-14 z" fill="#FFFFFF" stroke="#DCE2EE"/>
+  </g>
+
+  <!-- page tag -->
+  <g>
+    <rect x="432" y="278" width="132" height="34" rx="17" fill="#2A4FD7"/>
+    <rect x="450" y="290" width="48" height="8" rx="4" fill="#FFFFFF" opacity=".85"/>
+    <rect x="506" y="290" width="40" height="8" rx="4" fill="#FFFFFF" opacity=".55"/>
+  </g>
+
+  <!-- small figure icon -->
+  <g>
+    <rect x="408" y="256" width="0" height="0"/>
+  </g>
+</svg>

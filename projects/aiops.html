@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIOps 故障诊断 Agent · SFT + Agentic RL — JasonPan</title>
+<meta name="description" content="用双 Agent 分级诊断—修复闭环处理线上故障，并把工程侧的确定性判定改造成零标注奖励，用 veRL + GRPO 把 9B 小模型训练成诊断底座。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23171610'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='15' fill='%23F7F5F0' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="site-head">
+  <div class="wrap inner">
+    <a class="brand" href="../index.html">
+      <span class="mark">P</span>
+      <span>JasonPan</span>
+      <span class="sub">Notes on Agents</span>
+    </a>
+    <nav class="nav" id="nav">
+      <a href="../index.html#posts" aria-current="page">文章</a>
+      <a href="../index.html#about">关于</a>
+    </nav>
+    <button class="nav-toggle" type="button" aria-label="打开导航">菜单</button>
+  </div>
+</header>
+
+<main>
+
+<div class="doc-hero">
+  <div class="wrap">
+    <div class="crumb"><a href="../index.html">首页</a><span class="sep">/</span>文章 01</div>
+    <span class="eyebrow">Multi-Agent · Agentic RL · Reward Design</span>
+    <h1>AIOps 故障诊断 Agent：把决策底座换成自己训的 9B 小模型</h1>
+    <p class="lede">
+      线上故障排查依赖 SRE 经验，响应慢、结论不可复现。我们先用双 Agent 把
+      「告警 → 根因 → 处置」做成闭环，再把闭环里本来就存在的确定性判定改造成奖励信号，
+      用 SFT + GRPO 训练一个可私有化部署的故障处置模型。
+    </p>
+
+    <div class="doc-meta">
+      <div class="m"><span class="k">场景</span><span class="v">线上故障诊断与处置</span></div>
+      <div class="m"><span class="k">形态</span><span class="v">生产系统 · 2025 至今</span></div>
+      <div class="m"><span class="k">底座</span><span class="v">Qwen3.5-9B + LoRA</span></div>
+      <div class="m"><span class="k">评测</span><span class="v">13 个故障场景 · 25 条样本</span></div>
+    </div>
+
+    <div class="kpi reveal">
+      <div class="cell">
+        <span class="k">service 准确率</span>
+        <div class="v">0.48<span class="a"> → </span>0.80</div>
+        <div class="d">zero-shot → GRPO step15</div>
+      </div>
+      <div class="cell">
+        <span class="k">MTTR · P50</span>
+        <div class="v">6.7<span class="a"> → </span>2.0<span style="font-size:12px;color:var(--muted)">min</span></div>
+        <div class="d">同一批 13 个故障场景</div>
+      </div>
+      <div class="cell">
+        <span class="k">PR 提交率</span>
+        <div class="v">0.33<span class="a"> → </span>1.00</div>
+        <div class="d">代码类故障的自动修复闭环</div>
+      </div>
+      <div class="cell">
+        <span class="k">训练成本</span>
+        <div class="v">1 × A800</div>
+        <div class="d">SFT + 15 epoch GRPO，单卡完成</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 问题 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="cols">
+      <div class="prose reveal">
+        <span class="eyebrow"><span class="idx">01</span>问题</span>
+        <h2>故障诊断是长程工具调用，不是一次问答</h2>
+        <p class="claim">
+          给定一条告警，Agent 要自己检索指标、日志、链路，交叉验证后定位可疑服务与根因类型，
+          再判断该走自动修复、提交 PR 还是转人工。
+        </p>
+        <p>
+          这类任务用商用大模型（如 Claude Opus）驱动时效果是够用的，但在生产环境里遇到三条硬约束：
+          <strong>成本</strong>（每次排查几十轮工具调用）、<strong>时延</strong>、以及<strong>数据不能出域</strong>。
+        </p>
+        <p>
+          另一个容易被忽略的问题是<strong>不可复现</strong>：同一条告警，两次排查的路径可能完全不同，
+          结论对不上时没人能说清是模型判断错了，还是这次观测到的信号本来就不一样。
+        </p>
+      </div>
+
+      <div class="reveal">
+        <div class="note-box" style="margin-bottom:22px;">
+          <span class="h">为什么不用 LLM-as-judge 做奖励</span>
+          <p>
+            自训小模型最直接的做法是请一个强模型给轨迹打分。但 judge 的偏好会漂移，
+            而且它本身也在猜「什么算诊断正确」——用它训出来的模型，学到的是模仿 judge，不是学会诊断。
+          </p>
+          <p>
+            我们的做法是回到系统里找<strong>已经存在的确定性判定</strong>：工具白名单的放行/拦截、
+            输出 schema 的结构化校验、终止条件判定。这些原本用于安全兜底，
+            天然对齐「这次处置是否合规、是否可执行」，而且零标注、不漂移。
+          </p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>约束</th><th>商用大模型</th><th>自训 9B</th></tr></thead>
+            <tbody>
+              <tr><td>单次排查成本</td><td>按 token 计费，长程轨迹高</td><td class="best">自建推理，边际成本低</td></tr>
+              <tr><td>数据出域</td><td>需走外部接口</td><td class="best">完全内网</td></tr>
+              <tr><td>行为可控性</td><td>提示词约束</td><td class="best">训练信号可注入</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 架构图 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>系统架构</h2>
+      <div class="note">左半是诊断 Agent 的 ReAct 循环，右半是它唤起修复 Agent 后的直线流程。</div>
+    </div>
+
+    <figure class="figure reveal">
+      <div class="figure-head">
+        <span class="t">图 1 · 双 Agent 分级诊断—修复链路</span>
+        <span class="n">Architecture</span>
+      </div>
+      <div class="fig-scroll">
+        <svg class="diagram" viewBox="0 0 1040 660" role="img" aria-label="AIOps 双 Agent 架构图">
+          <defs>
+            <marker id="ar1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#B7C0D0"/>
+            </marker>
+            <marker id="ar1d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#2A4FD7"/>
+            </marker>
+          </defs>
+
+          <!-- band 1: 入口 -->
+          <g>
+            <rect class="node" x="24" y="28" width="180" height="54" rx="2"/>
+            <text class="nd-t" x="114" y="51" text-anchor="middle">告警接入</text>
+            <text class="nd-s" x="114" y="68" text-anchor="middle">指标 / 日志 / 链路</text>
+
+            <rect class="node" x="236" y="28" width="180" height="54" rx="2"/>
+            <text class="nd-t" x="326" y="51" text-anchor="middle">归一 · 去重</text>
+            <text class="nd-s" x="326" y="68" text-anchor="middle">合并重复告警，压噪声</text>
+
+            <rect class="node" x="448" y="28" width="210" height="54" rx="2"/>
+            <text class="nd-t" x="553" y="51" text-anchor="middle">上下文装配</text>
+            <text class="nd-s" x="553" y="68" text-anchor="middle">最近变更 / 依赖拓扑</text>
+
+            <path class="edge" d="M204,55 L236,55" marker-end="url(#ar1)"/>
+            <path class="edge" d="M416,55 L448,55" marker-end="url(#ar1)"/>
+            <path class="edge" d="M553,82 L553,106 L284,106 L284,140" marker-end="url(#ar1)"/>
+          </g>
+
+          <!-- band 2 左: 诊断 Agent -->
+          <text class="grp-t" x="36" y="132">诊断 Agent</text>
+          <text class="grp-t" x="504" y="132" text-anchor="end">Qwen3.5-9B · LoRA</text>
+          <rect class="grp" x="24" y="140" width="488" height="280" rx="2"/>
+
+          <g>
+            <rect class="node-a" x="44" y="166" width="160" height="56" rx="2"/>
+            <text class="nd-t" x="124" y="190" text-anchor="middle">LLM 决策</text>
+            <text class="nd-s" x="124" y="207" text-anchor="middle">读 state，选下一步</text>
+
+            <rect class="node" x="44" y="244" width="160" height="56" rx="2"/>
+            <text class="nd-t" x="124" y="268" text-anchor="middle">工具执行</text>
+            <text class="nd-s" x="124" y="285" text-anchor="middle">kubectl / docker / 日志</text>
+
+            <rect class="node" x="44" y="322" width="160" height="56" rx="2"/>
+            <text class="nd-t" x="124" y="346" text-anchor="middle">观察回填</text>
+            <text class="nd-s" x="124" y="363" text-anchor="middle">截断后写回 state</text>
+
+            <path class="edge" d="M124,222 L124,244" marker-end="url(#ar1)"/>
+            <path class="edge" d="M124,300 L124,322" marker-end="url(#ar1)"/>
+            <path class="edge" d="M44,350 L32,350 L32,194 L44,194" marker-end="url(#ar1)"/>
+            <text class="lbl" x="124" y="404" text-anchor="middle">ReAct 循环 · 每轮重读 state</text>
+
+            <rect class="node" x="248" y="166" width="256" height="56" rx="2"/>
+            <text class="nd-t" x="376" y="190" text-anchor="middle">Skills · 动态加载</text>
+            <text class="nd-s" x="376" y="207" text-anchor="middle">四类故障的排查方法论</text>
+
+            <rect class="node" x="248" y="244" width="256" height="56" rx="2"/>
+            <text class="nd-t" x="376" y="268" text-anchor="middle">Memory · Milvus</text>
+            <text class="nd-s" x="376" y="285" text-anchor="middle">历史故障经验，按需检索</text>
+
+            <rect class="node" x="248" y="322" width="256" height="56" rx="2"/>
+            <text class="nd-t" x="376" y="346" text-anchor="middle">Schema + Hook 护栏</text>
+            <text class="nd-s" x="376" y="363" text-anchor="middle">三级校验 · 白名单放行/拦截</text>
+
+            <!-- 注入总线 -->
+            <path class="edge-d" d="M248,194 L232,194"/>
+            <path class="edge-d" d="M248,272 L232,272"/>
+            <path class="edge-d" d="M248,350 L232,350"/>
+            <path class="edge-d" d="M232,350 L232,194 L214,194" marker-end="url(#ar1d)"/>
+          </g>
+
+          <!-- 诊断 -> 修复 -->
+          <path class="edge" d="M512,200 L592,200" marker-end="url(#ar1)"/>
+          <text class="lbl" x="552" y="192" text-anchor="middle">代码 Bug</text>
+
+          <!-- band 2 右: 修复 Agent -->
+          <text class="grp-t" x="604" y="132">修复 Agent</text>
+          <rect class="grp" x="592" y="140" width="424" height="280" rx="2"/>
+          <g>
+            <rect class="node-b" x="612" y="166" width="384" height="54" rx="2"/>
+            <text class="nd-t" x="804" y="189" text-anchor="middle">① 差异定位</text>
+            <text class="nd-s" x="804" y="205" text-anchor="middle">堆栈 / 日志定位到文件与行</text>
+
+            <rect class="node-b" x="612" y="236" width="384" height="54" rx="2"/>
+            <text class="nd-t" x="804" y="259" text-anchor="middle">② clone → 改码 → 本地跑用例</text>
+            <text class="nd-s" x="804" y="275" text-anchor="middle">限定分支，改动不触碰线上</text>
+
+            <rect class="node-b" x="612" y="306" width="384" height="54" rx="2"/>
+            <text class="nd-t" x="804" y="329" text-anchor="middle">③ 通过则提 PR，失败则回滚</text>
+            <text class="nd-s" x="804" y="345" text-anchor="middle">附复现步骤与验证结论</text>
+
+            <path class="edge" d="M804,220 L804,236" marker-end="url(#ar1)"/>
+            <path class="edge" d="M804,290 L804,306" marker-end="url(#ar1)"/>
+          </g>
+
+          <!-- band 3: 三路出口 -->
+          <g>
+            <rect class="node" x="24" y="450" width="300" height="64" rx="2"/>
+            <text class="nd-t" x="174" y="476" text-anchor="middle">低风险 · 现场恢复</text>
+            <text class="nd-s" x="174" y="493" text-anchor="middle">滚动重启 / 重建 Pod / 扩容</text>
+
+            <rect class="node-a" x="364" y="450" width="300" height="64" rx="2"/>
+            <text class="nd-t" x="514" y="476" text-anchor="middle">高风险 · 人工确认</text>
+            <text class="nd-s" x="514" y="493" text-anchor="middle">白名单外的操作一律拦截</text>
+
+            <rect class="node" x="704" y="450" width="300" height="64" rx="2"/>
+            <text class="nd-t" x="854" y="476" text-anchor="middle">代码 Bug · 提交 PR</text>
+            <text class="nd-s" x="854" y="493" text-anchor="middle">测试通过后进入人工评审</text>
+
+            <path class="edge" d="M174,420 L174,450" marker-end="url(#ar1)"/>
+            <path class="edge" d="M500,420 L500,444 L514,444 L514,450" marker-end="url(#ar1)"/>
+            <path class="edge" d="M854,420 L854,450" marker-end="url(#ar1)"/>
+          </g>
+
+          <!-- 结果总线 -->
+          <path class="edge" d="M174,514 L174,536 L854,536"/>
+          <path class="edge" d="M514,514 L514,536"/>
+          <path class="edge" d="M854,514 L854,536"/>
+          <path class="edge" d="M174,536 L140,536 L140,556" marker-end="url(#ar1)"/>
+
+          <!-- band 4: 训练闭环 -->
+          <g>
+            <rect class="node" x="24" y="556" width="232" height="58" rx="2"/>
+            <text class="nd-t" x="140" y="580" text-anchor="middle">归因结果</text>
+            <text class="nd-s" x="140" y="597" text-anchor="middle">service / kind / route</text>
+
+            <rect class="node-a" x="278" y="556" width="232" height="58" rx="2"/>
+            <text class="nd-t" x="394" y="580" text-anchor="middle">奖励函数</text>
+            <text class="nd-s" x="394" y="597" text-anchor="middle">Hook 判定 + Schema 校验</text>
+
+            <rect class="node-a" x="532" y="556" width="232" height="58" rx="2"/>
+            <text class="nd-t" x="648" y="580" text-anchor="middle">GRPO · veRL</text>
+            <text class="nd-s" x="648" y="597" text-anchor="middle">15 epoch · 74 条 train 告警</text>
+
+            <rect class="node-a" x="786" y="556" width="232" height="58" rx="2"/>
+            <text class="nd-t" x="902" y="580" text-anchor="middle">LoRA 合并 · vLLM</text>
+            <text class="nd-s" x="902" y="597" text-anchor="middle">Anthropic API 接回 Agent</text>
+
+            <path class="edge" d="M256,585 L278,585" marker-end="url(#ar1)"/>
+            <path class="edge" d="M510,585 L532,585" marker-end="url(#ar1)"/>
+            <path class="edge" d="M764,585 L786,585" marker-end="url(#ar1)"/>
+          </g>
+        </svg>
+      </div>
+      <figcaption>
+        实线表示数据流与调用，虚线表示上下文注入。诊断 Agent 每次决策前会拿到三类信息：按告警语义匹配的故障排查
+        Skill、从 Milvus 检索到的历史相似故障、以及当前可执行操作的 Schema 与白名单约束。
+        修复 Agent 独立于线上环境运行，改动只在仓库与测试环境里发生。
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ 关键设计 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>四个关键设计</h2>
+      <div class="note">重点不是「用了 GRPO」，而是奖励从哪来、护栏放在哪一层。</div>
+    </div>
+
+    <div class="design-list reveal">
+      <div class="design">
+        <div class="dt"><span class="n">Design 01</span>分级处置：能现场恢复的不改代码</div>
+        <div class="dd">
+          <p>
+            故障分两类：一类是资源水位、依赖抖动、发版引起的，就地操作就能恢复；
+            另一类是代码缺陷，只能改代码。前者按风险等级走白名单自动执行（滚动重启、重建 Pod、扩容），
+            后者才唤起修复 Agent。这样避免了「一个重启能解决的事，跑成一次完整的改码 + PR 流程」。
+          </p>
+          <p>
+            高风险操作（改配置、删数据、动网络策略）不自动执行，转为工单并附上诊断轨迹，
+            由人确认。护栏是硬编码的，不依赖模型自觉。
+          </p>
+        </div>
+      </div>
+
+      <div class="design">
+        <div class="dt"><span class="n">Design 02</span>把方法论和记忆外部化</div>
+        <div class="dd">
+          <p>
+            四类经典故障（内存泄漏、依赖故障、发版回滚、配置错误）的排查步骤被写成 Agent Skills，
+            按告警语义动态加载，而不是全量塞进系统提示词——这一点和语音 Agent 里收敛工具集是同一个思路。
+          </p>
+          <p>
+            每次诊断结束后，轨迹被向量化写入 Milvus 形成经验库，封装成一个检索工具，
+            由模型自己决定什么时候去查。相同形态的故障第二次出现时，检索能直接给出「上次是哪一步定位到的」。
+          </p>
+        </div>
+      </div>
+
+      <div class="design">
+        <div class="dt"><span class="n">Design 03</span>Schema 三级审查</div>
+        <div class="dd">
+          <p>
+            SDK 层规定 Agent 输出的结构，编排层做三级处理：<strong>raw 文本校验</strong>（能否解析成约定结构）→
+            <strong>prompt 重试</strong>（解析失败时把错误回灌给模型重写一次）→
+            <strong>兜底降级</strong>（仍失败则退化为只出诊断报告，不执行任何操作）。
+          </p>
+          <p>
+            这层审查不只是工程保险，它同时是训练信号的来源——
+            哪一级被触发、校验是否通过，都是确定性的、可复算的。
+          </p>
+        </div>
+      </div>
+
+      <div class="design">
+        <div class="dt"><span class="n">Design 04</span>复用工程判定做零标注奖励</div>
+        <div class="dd">
+          <p>
+            奖励由三部分组成：<strong>结果正确性</strong>（service / kind / route 是否命中）、
+            <strong>过程合规性</strong>（Hook 的放行/拦截结果）、<strong>格式合法性</strong>（Schema 校验是否通过）。
+            三者都不需要人工标注，也不依赖另一个模型来打分。
+          </p>
+          <p>
+            同时设了四类反 reward hacking：重复动作惩罚、空转惩罚、越权尝试惩罚，
+            以及对「不做事但格式完美」这类退化解的抑制——否则模型很快学会只输出一份格式正确、内容空洞的报告。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 训练流水线 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>数据与训练</h2>
+      <div class="note">冷启动只需要 63 条成功轨迹，难点在怎么把长程轨迹拆成可训练的样本。</div>
+    </div>
+
+    <figure class="figure reveal">
+      <div class="figure-head">
+        <span class="t">图 2 · 从轨迹采集到 GRPO 的样本流</span>
+        <span class="n">Training Pipeline</span>
+      </div>
+      <div class="fig-scroll">
+        <svg class="diagram" viewBox="0 0 1040 220" role="img" aria-label="训练数据流水线">
+          <defs>
+            <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#B7C0D0"/>
+            </marker>
+            <marker id="ar2d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#2A4FD7"/>
+            </marker>
+          </defs>
+          <g>
+            <rect class="node" x="24" y="56" width="180" height="56" rx="2"/>
+            <text class="nd-t" x="114" y="80" text-anchor="middle">Opus 采集</text>
+            <text class="nd-s" x="114" y="97" text-anchor="middle">真实故障环境跑轨迹</text>
+
+            <rect class="node" x="228" y="56" width="180" height="56" rx="2"/>
+            <text class="nd-t" x="318" y="80" text-anchor="middle">拒绝采样</text>
+            <text class="nd-s" x="318" y="97" text-anchor="middle">只留成功轨迹 63 条</text>
+
+            <rect class="node" x="432" y="56" width="180" height="56" rx="2"/>
+            <text class="nd-t" x="522" y="80" text-anchor="middle">前缀拆分</text>
+            <text class="nd-s" x="522" y="97" text-anchor="middle">一条轨迹拆成多个样本</text>
+
+            <rect class="node" x="636" y="56" width="180" height="56" rx="2"/>
+            <text class="nd-t" x="726" y="80" text-anchor="middle">LoRA SFT</text>
+            <text class="nd-s" x="726" y="97" text-anchor="middle">667 条样本 → sft-v9</text>
+
+            <rect class="node-a" x="840" y="56" width="176" height="56" rx="2"/>
+            <text class="nd-t" x="928" y="80" text-anchor="middle">GRPO</text>
+            <text class="nd-s" x="928" y="97" text-anchor="middle">15 epoch，单卡 A800</text>
+
+            <path class="edge" d="M204,84 L228,84" marker-end="url(#ar2)"/>
+            <path class="edge" d="M408,84 L432,84" marker-end="url(#ar2)"/>
+            <path class="edge" d="M612,84 L636,84" marker-end="url(#ar2)"/>
+            <path class="edge" d="M816,84 L840,84" marker-end="url(#ar2)"/>
+          </g>
+
+          <g>
+            <rect class="node" x="432" y="150" width="384" height="46" rx="2"/>
+            <text class="nd-t" x="624" y="170" text-anchor="middle">奖励信号</text>
+            <text class="nd-s" x="624" y="186" text-anchor="middle">Hook 判定 · Schema 校验 · 结果命中</text>
+
+            <rect class="node" x="840" y="150" width="176" height="46" rx="2"/>
+            <text class="nd-t" x="928" y="172" text-anchor="middle">heldout 评测</text>
+            <text class="nd-s" x="928" y="188" text-anchor="middle">+ 4 类域外故障</text>
+
+            <path class="edge-d" d="M816,150 L816,132 L928,132 L928,112" marker-end="url(#ar2d)"/>
+            
+          </g>
+        </svg>
+      </div>
+      <figcaption>
+        前缀拆分是把一条长轨迹的不同决策点分别截断成样本，让模型学会「站在轨迹中间时该选什么」，
+        而不是只学会复述最终答案。评测集刻意混入了 4 类训练里没出现过的故障类型，
+        用来判断模型是真的学到了排查方法，还是记住了见过的场景。
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ 效果 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>实测效果</h2>
+      <div class="note">13 个真实 docker-compose 故障场景，25 条评测样本，同一套评测脚本跑四个档位。</div>
+    </div>
+
+    <div class="chart reveal" style="margin-bottom:28px;">
+      <div class="chart-head">
+        <span class="t">三维诊断准确率（同一评测集，逐档位对比）</span>
+        <div class="legend">
+          <span><i style="background:#AEB6C6"></i>zero-shot</span>
+          <span><i style="background:#6E84A8"></i>SFT</span>
+          <span><i style="background:#2A4FD7"></i>GRPO</span>
+          <span><i style="background:#D5DEF7"></i>Opus 参考</span>
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="grp-name">service 准确率 <span class="sub">定位到哪个服务</span></div>
+        <div class="bar"><span class="nm">zero-shot</span><div class="track"><span class="fill" data-w="48" style="background:#AEB6C6"></span></div><span class="val">0.48</span></div>
+        <div class="bar"><span class="nm">SFT v9</span><div class="track"><span class="fill" data-w="56.8" style="background:#6E84A8"></span></div><span class="val">0.57</span></div>
+        <div class="bar is-best"><span class="nm">GRPO step15</span><div class="track"><span class="fill" data-w="80" style="background:#2A4FD7"></span></div><span class="val">0.80</span></div>
+        <div class="bar"><span class="nm">Opus</span><div class="track"><span class="fill" data-w="91.3" style="background:#D5DEF7"></span></div><span class="val">0.91</span></div>
+      </div>
+
+      <div class="grp">
+        <div class="grp-name">kind 准确率 <span class="sub">根因类型判对</span></div>
+        <div class="bar"><span class="nm">zero-shot</span><div class="track"><span class="fill" data-w="52" style="background:#AEB6C6"></span></div><span class="val">0.52</span></div>
+        <div class="bar"><span class="nm">SFT v9</span><div class="track"><span class="fill" data-w="67.6" style="background:#6E84A8"></span></div><span class="val">0.68</span></div>
+        <div class="bar is-best"><span class="nm">GRPO step15</span><div class="track"><span class="fill" data-w="72" style="background:#2A4FD7"></span></div><span class="val">0.72</span></div>
+        <div class="bar"><span class="nm">Opus</span><div class="track"><span class="fill" data-w="91.3" style="background:#D5DEF7"></span></div><span class="val">0.91</span></div>
+      </div>
+
+      <div class="grp">
+        <div class="grp-name">route 准确率 <span class="sub">该自动修复、提 PR 还是转人工</span></div>
+        <div class="bar"><span class="nm">zero-shot</span><div class="track"><span class="fill" data-w="36" style="background:#AEB6C6"></span></div><span class="val">0.36</span></div>
+        <div class="bar"><span class="nm">SFT v9</span><div class="track"><span class="fill" data-w="46" style="background:#6E84A8"></span></div><span class="val">0.46</span></div>
+        <div class="bar is-best"><span class="nm">GRPO step15</span><div class="track"><span class="fill" data-w="64" style="background:#2A4FD7"></span></div><span class="val">0.64</span></div>
+        <div class="bar"><span class="nm">Opus</span><div class="track"><span class="fill" data-w="91.3" style="background:#D5DEF7"></span></div><span class="val">0.91</span></div>
+      </div>
+    </div>
+
+    <div class="table-wrap reveal" style="margin-bottom:28px;">
+      <table>
+        <thead>
+          <tr>
+            <th>过程与效率指标</th>
+            <th class="num">zero-shot</th>
+            <th class="num">SFT v9</th>
+            <th class="num">GRPO step15</th>
+            <th class="num">Opus 参考</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>MTTR · P50</td>
+            <td class="num">6.73 min</td>
+            <td class="num">5.60 min</td>
+            <td class="num best">2.00 min</td>
+            <td class="num">2.62 min</td>
+          </tr>
+          <tr>
+            <td>修复成功率</td>
+            <td class="num">0.50</td>
+            <td class="num">0.67</td>
+            <td class="num best">0.83</td>
+            <td class="num">1.00</td>
+          </tr>
+          <tr>
+            <td>代码定位准确率</td>
+            <td class="num">0.20</td>
+            <td class="num">0.22</td>
+            <td class="num best">0.80</td>
+            <td class="num">1.00</td>
+          </tr>
+          <tr>
+            <td>PR 提交率</td>
+            <td class="num">0.33</td>
+            <td class="num">0.50</td>
+            <td class="num best">1.00</td>
+            <td class="num">1.00</td>
+          </tr>
+          <tr>
+            <td>样本行数</td>
+            <td class="num">25</td>
+            <td class="num">37</td>
+            <td class="num">25</td>
+            <td class="num">23</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="cols">
+      <div class="reveal">
+        <div class="sample">
+          <div class="sample-bar">
+            <span>诊断轨迹节选 · 已脱敏</span>
+            <span>trace 04</span>
+          </div>
+          <div class="sample-body">
+            <div class="line"><span class="who">告警</span><span class="txt">checkout-api 5xx 比例 12%，P99 4.2s，持续 6min</span></div>
+            <div class="line"><span class="who">决策</span><span class="txt dim">先排除资源水位，再判断是否为依赖侧超时</span></div>
+            <div class="line"><span class="who">调用</span><span class="txt"><span class="chip">kubectl top pod</span> 内存 93%↑，CPU 31%</span></div>
+            <div class="line"><span class="who">调用</span><span class="txt"><span class="chip">kubectl logs | grep pool</span> <span class="hl">HikariPool 等待 28s</span></span></div>
+            <div class="line"><span class="who">归因</span><span class="txt">service=checkout-api · kind=依赖故障 · route=现场恢复</span></div>
+            <div class="line"><span class="who">护栏</span><span class="txt dim">滚动重启命中白名单 → 放行</span></div>
+            <div class="line"><span class="who">结果</span><span class="txt">5xx 回落至 0.3%，MTTR 3m12s</span></div>
+          </div>
+        </div>
+        <p style="font-size:12.5px;color:var(--muted);margin-top:12px;">
+          示例为按真实输出结构重写的脱敏轨迹，服务名与数值不代表任何线上系统。
+        </p>
+      </div>
+
+      <div class="reveal">
+        <div class="note-box" style="margin-bottom:22px;">
+          <span class="h">怎么读这张表</span>
+          <p>
+            <strong>SFT 提升的是「会说」，GRPO 提升的是「会判」。</strong>
+            从数据看，SFT 在 kind 上的涨幅（0.52 → 0.68）明显大于 route（0.36 → 0.46）——
+            因为格式与常见根因可以模仿，而「该不该自动动手」需要权衡风险，靠模仿学不出来。
+            GRPO 之后 route 从 0.46 跳到 0.64，是这三项里相对涨幅最大的一档。
+          </p>
+          <p>
+            另一个值得注意的点是 MTTR：GRPO 版（2.00 min）比 Opus（2.62 min）还低，
+            尽管它的准确率更低。原因是小模型很少绕路——它在训练里学会了少做几轮无效探查，
+            而准确率更高的 Opus 会为了确认结论多跑几轮工具。
+          </p>
+        </div>
+        <div class="note-box">
+          <span class="h">边界</span>
+          <p>
+            评测集只有 13 个场景 25 条样本，量级偏小，单条样本就能带来 4% 的波动，
+            因此上表的差异应当看趋势而不是小数点。
+            另外四项指标的分母不同（修复成功率分母 6，代码定位 5，PR 提交率 5），
+            跨行比较需谨慎。「人工 40 分钟」引用的是行业公开均值，不是本项目内做的人工对照实验。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 我的部分 ============ -->
+<section class="section">
+  <div class="wrap">
+    <div class="prose reveal" style="max-width:820px;">
+      <span class="eyebrow"><span class="idx">05</span>我的部分</span>
+      <h2 style="margin-bottom:16px;">做了什么，没做什么</h2>
+      <p>
+        这个系统的决策层由我从需求定义一路推到上线：架构设计、Skill 与护栏体系、数据构造、
+        奖励函数、训练与评测，以及最后的 vLLM 服务化接入。上游的 AIOps 平台（告警接入、工具层、执行侧）
+        是已有的基础设施，我写的是它上面的决策层。
+      </p>
+      <p>
+        有两点值得如实说明：一是 <strong>SFT 数据来自强模型在真实环境里的轨迹</strong>，
+        所以模型的起点是「模仿一个会排查的模型」，而不是从零学会排查；
+        二是 <strong>奖励函数依赖上游 Hook 与 Schema 的判定质量</strong>，
+        上游护栏写得越细，训练信号就越密——这也是我认为这套方法可迁移的原因：
+        任何有强工程约束的 Agent 系统，都自带一套没被用起来的奖励。
+      </p>
+    </div>
+
+    <div class="pager reveal" style="margin-top:30px;">
+      <a href="../index.html#work">
+        <span class="dir">← 返回</span>
+        <span class="ttl">全部项目</span>
+      </a>
+      <a class="next" href="voice-agent.html">
+        <span class="dir">下一个 →</span>
+        <span class="ttl">分层 Function Calling + MCP 的终端语音 Agent</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <div class="foot-top">
+      <div class="foot-note">
+        文中服务名、数值与轨迹示例均已脱敏；指标来自项目内评测脚本，样本量与统计口径见正文。
+      </div>
+      <div class="foot-links">
+        <a href="../index.html">首页</a>
+        <a href="../index.html#posts">全部文章</a>
+      </div>
+    </div>
+    <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--muted);">© <span id="yr">2026</span> JasonPan</div>
+  </div>
+</footer>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
