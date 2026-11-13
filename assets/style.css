@@ -323,6 +323,9 @@ em {
 
 .post:hover .post-arrow { transform: translateX(4px); }
 
+/* 防止中文词被拆到两行 */
+.nw { white-space: nowrap; }
+
 /* ---------- home : about ---------- */
 
 .about { padding: 56px 0 8px; }
